@@ -1,4 +1,4 @@
-package com.aks_labs.tulsi
+package com.peeyupatel.phototextsearch
 
 import org.junit.Test
 

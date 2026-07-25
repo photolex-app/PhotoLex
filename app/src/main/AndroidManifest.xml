@@ -70,7 +70,7 @@
             android:exported="true"
             android:theme="@style/Theme.Gallery">
 
-            <intent-filter android:label="Open with Tulsi Gallery">
+            <intent-filter android:label="Open with PhotoLex">
                 <category android:name="android.intent.category.DEFAULT" />
 
                 <action android:name="android.intent.action.VIEW" />
@@ -84,7 +84,7 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.aks_labs.tulsi.fileprovider"
+            android:authorities="com.peeyupatel.phototextsearch.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
 
@@ -95,7 +95,7 @@
 
         <provider
             android:name=".mediastore.content_provider.LavenderContentProvider"
-            android:authorities="com.aks_labs.tulsi.content_provider"
+            android:authorities="com.peeyupatel.phototextsearch.content_provider"
             android:enabled="true"
             android:exported="false" />
 
@@ -105,9 +105,9 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.aks_labs.tulsi.OCR_PAUSE" />
-                <action android:name="com.aks_labs.tulsi.OCR_RESUME" />
-                <action android:name="com.aks_labs.tulsi.OCR_VIEW_PROGRESS" />
+                <action android:name="com.peeyupatel.phototextsearch.OCR_PAUSE" />
+                <action android:name="com.peeyupatel.phototextsearch.OCR_RESUME" />
+                <action android:name="com.peeyupatel.phototextsearch.OCR_VIEW_PROGRESS" />
             </intent-filter>
         </receiver>
 
@@ -117,10 +117,10 @@
             android:enabled="true"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.aks_labs.tulsi.ocr.devanagari.PAUSE" />
-                <action android:name="com.aks_labs.tulsi.ocr.devanagari.RESUME" />
-                <action android:name="com.aks_labs.tulsi.ocr.devanagari.CANCEL" />
-                <action android:name="com.aks_labs.tulsi.ocr.devanagari.VIEW_PROGRESS" />
+                <action android:name="com.peeyupatel.phototextsearch.ocr.devanagari.PAUSE" />
+                <action android:name="com.peeyupatel.phototextsearch.ocr.devanagari.RESUME" />
+                <action android:name="com.peeyupatel.phototextsearch.ocr.devanagari.CANCEL" />
+                <action android:name="com.peeyupatel.phototextsearch.ocr.devanagari.VIEW_PROGRESS" />
             </intent-filter>
         </receiver>
 

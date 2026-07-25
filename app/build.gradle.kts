@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "com.aks_labs.tulsi"
+    namespace = "com.peeyupatel.phototextsearch"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.aks_labs.tulsi"
+        applicationId = "com.peeyupatel.phototextsearch"
         minSdk = 30
         targetSdk = 35
         versionCode = 103

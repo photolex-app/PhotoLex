@@ -41,3 +41,9 @@ Gallery_signed_universal.apk.idsig
 .idea
 .kotlin
 .idea/gradle.xml
+
+# Local IDE install (not part of the app, kept out of version control)
+/AndroidStudio/
+
+# Claude Code local project settings
+/.claude/

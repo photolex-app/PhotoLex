@@ -1,10 +1,10 @@
 # Third-Party Licenses
 
-Tulsi Gallery uses several open-source libraries. This file contains the licenses for these libraries.
+PhotoLex uses several open-source libraries. This file contains the licenses for these libraries.
 
 ## LavenderGallery
 
-Tulsi Gallery is a fork of LavenderGallery.
+PhotoLex is a fork of Tulsi Gallery, which is itself a fork of LavenderGallery.
 
 **License**: GNU General Public License v3.0
 **Source**: https://github.com/kaii-lb/LavenderGallery

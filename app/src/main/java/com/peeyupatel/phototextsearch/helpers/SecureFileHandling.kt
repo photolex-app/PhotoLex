@@ -1,0 +1,89 @@
+package com.peeyupatel.phototextsearch.helpers
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import com.peeyupatel.phototextsearch.MainActivity.Companion.applicationDatabase
+import com.peeyupatel.phototextsearch.R
+import com.peeyupatel.phototextsearch.database.entities.SecuredItemEntity
+import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
+import com.peeyupatel.phototextsearch.mediastore.MediaType
+import java.io.ByteArrayOutputStream
+import java.io.File
+import androidx.core.graphics.scale
+
+fun getSecuredCacheImageForFile(
+    file: File,
+    context: Context
+) : File = File(context.appSecureThumbnailCacheDir + "/" + file.name + ".png")
+
+fun getSecuredCacheImageForFile(
+    fileName: String,
+    context: Context
+) : File = File(context.appSecureThumbnailCacheDir + "/" + fileName + ".png")
+
+fun getDecryptCacheForFile(
+    file: File,
+    context: Context
+) : File = File(context.appSecureThumbnailCacheDir + "/" + "${file.nameWithoutExtension}-decrypt.${file.extension}")
+
+fun getSecureDecryptedVideoFile(
+	name: String,
+	context: Context
+) : File = File(context.appSecureVideoCacheDir, name)
+
+fun addSecuredCachedMediaThumbnail(
+    context: Context,
+    mediaItem: MediaStoreData,
+    metadataRetriever: MediaMetadataRetriever,
+    file: File
+) {
+    val thumbnailFile = getSecuredCacheImageForFile(file = file, context = context)
+
+    val thumbnail =
+        if (mediaItem.type == MediaType.Video) {
+            metadataRetriever.setDataSource(context, mediaItem.uri)
+
+            metadataRetriever.getScaledFrameAtTime(
+                1000000L,
+                MediaMetadataRetriever.OPTION_PREVIOUS_SYNC,
+                1024,
+                1024
+            )
+        } else {
+            val image = BitmapFactory.decodeFile(mediaItem.absolutePath)
+            val ratio = image.width.toFloat() / image.height.toFloat()
+
+            image.scale((1024 * ratio).toInt(), 1024, false)
+        }
+
+    val actual =
+        if (thumbnail != null) {
+            val bytes = ByteArrayOutputStream()
+            thumbnail.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+
+            bytes.toByteArray()
+        } else {
+            val image = BitmapFactory.decodeResource(context.resources, R.drawable.broken_image)
+            val bytes = ByteArrayOutputStream()
+            image.compress(Bitmap.CompressFormat.PNG, 100, bytes)
+
+            bytes.toByteArray()
+        }
+
+    val iv = EncryptionManager.encryptInputStream(
+        actual.inputStream(),
+        thumbnailFile.outputStream(),
+    )
+
+    applicationDatabase.securedItemEntityDao().insertEntity(
+        SecuredItemEntity(
+            originalPath = thumbnailFile.absolutePath,
+            securedPath = thumbnailFile.absolutePath,
+            iv = iv
+        )
+    )
+}
+
+

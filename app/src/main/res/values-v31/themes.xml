@@ -4,11 +4,11 @@
         <item name="postSplashScreenTheme">@style/Theme.Gallery</item>
 
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">#ffffff</item>
-        <item name="android:windowSplashScreenBackground">?attr/backgroundColor</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#101B33</item>
+        <item name="android:windowSplashScreenBackground">#101B33</item>
     </style>
 
-    <style name="Theme.Gallery" parent="Theme.Material3.DynamicColors.DayNight">
+    <style name="Theme.Gallery" parent="Theme.Material3.DayNight">
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>
