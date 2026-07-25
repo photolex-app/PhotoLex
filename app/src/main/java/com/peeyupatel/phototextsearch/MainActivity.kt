@@ -47,7 +47,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -80,6 +79,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -214,6 +214,20 @@ fun isGestureNavigationEnabled(resources: Resources): Boolean {
     }
 }
 
+/**
+ * Picks status bar icon appearance (dark icons vs light icons) based on the app's own
+ * actually-rendered color scheme, not the system's dark-mode setting -- the app has its own
+ * independent theme override (see GalleryTheme/getFollowDarkMode), so system dark mode and the
+ * app's rendered theme can disagree, which made SystemBarStyle.auto() pick icon colors that
+ * didn't match what was actually on screen (e.g. invisible white icons on a light app background).
+ */
+@Composable
+fun themedStatusBarStyle(scrimColor: Color): SystemBarStyle {
+    val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val argb = scrimColor.toArgb()
+    return if (isLightTheme) SystemBarStyle.light(argb, argb) else SystemBarStyle.dark(argb)
+}
+
 class MainActivity : ComponentActivity() {
     companion object {
         lateinit var applicationDatabase: MediaDatabase
@@ -313,15 +327,7 @@ class MainActivity : ComponentActivity() {
                     if (!stateValue) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle =
-                                if (!isSystemInDarkTheme()) {
-                                    SystemBarStyle.light(
-                                        MaterialTheme.colorScheme.background.toArgb(),
-                                        MaterialTheme.colorScheme.background.toArgb()
-                                    )
-                                } else {
-                                    SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb())
-                                }
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
 
                         PermissionHandler(continueToApp)
@@ -497,15 +503,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.MainScreen.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle =
-                                if (!isSystemInDarkTheme()) {
-                                    SystemBarStyle.light(
-                                        MaterialTheme.colorScheme.background.toArgb(),
-                                        MaterialTheme.colorScheme.background.toArgb()
-                                    )
-                                } else {
-                                    SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb())
-                                }
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList = selectedItemsList,
@@ -527,10 +525,7 @@ class MainActivity : ComponentActivity() {
                                     alpha = 0.2f
                                 ).toArgb()
                             ),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.2f).toArgb(),
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.2f).toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f))
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -552,7 +547,8 @@ class MainActivity : ComponentActivity() {
                             window = window,
                             viewModel = multiAlbumViewModel,
                             mediaItemId = screen.mediaItemId,
-                            loadsFromMainViewModel = screen.loadsFromMainViewModel
+                            loadsFromMainViewModel = screen.loadsFromMainViewModel,
+                            searchQuery = screen.searchQuery
                         )
                     }
 
@@ -564,10 +560,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.toArgb(),
-                                MaterialTheme.colorScheme.surface.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -612,10 +605,7 @@ class MainActivity : ComponentActivity() {
                     composable<Screens.SingleTrashedPhotoView> {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.toArgb(),
-                                MaterialTheme.colorScheme.surface.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -633,10 +623,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.TrashedPhotoView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.toArgb(),
-                                MaterialTheme.colorScheme.surface.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface)
                         )
 
                         setupNextScreen(
@@ -653,10 +640,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SecureFolder.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.toArgb(),
-                                MaterialTheme.colorScheme.surface.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -669,10 +653,7 @@ class MainActivity : ComponentActivity() {
                     composable<Screens.SingleHiddenPhotoView> {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surface.toArgb(),
-                                MaterialTheme.colorScheme.surface.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surface)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -690,10 +671,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.AboutAndUpdateView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -708,10 +686,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.FavouritesGridView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -772,10 +747,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.surfaceContainer.toArgb(),
-                                MaterialTheme.colorScheme.surfaceContainer.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surfaceContainer)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -798,10 +770,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SettingsMainView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -814,10 +783,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SettingsDebuggingView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -830,10 +796,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SettingsGeneralView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -846,10 +809,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SettingsMemoryAndStorageView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -862,10 +822,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.SettingsLookAndFeelView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -878,10 +835,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.UpdatesPage.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -894,10 +848,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.DataAndBackup.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -910,10 +861,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.PrivacyAndSecurity.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -926,10 +874,7 @@ class MainActivity : ComponentActivity() {
                     composable(MultiScreenViewType.OcrLanguageModelsView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
-                            statusBarStyle = SystemBarStyle.auto(
-                                MaterialTheme.colorScheme.background.toArgb(),
-                                MaterialTheme.colorScheme.background.toArgb()
-                            )
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                         )
                         setupNextScreen(
                             selectedItemsList,
@@ -991,8 +936,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Create scroll behavior for smooth top app bar animations
-        val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
+        // Pinned: the header stays fixed while the photo grid scrolls underneath it,
+        // rather than hiding/collapsing on scroll.
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
         // Create shared grid state for photo grids
         val sharedGridState = rememberLazyGridState()
@@ -1003,13 +949,15 @@ class MainActivity : ComponentActivity() {
         // Extract theme colors outside LaunchedEffect to avoid Composable context issues
         val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer.toArgb()
         val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
-        val isDarkTheme = isSystemInDarkTheme()
+        // Use the app's actual resolved theme (not the system's dark-mode setting) so status bar
+        // icons stay visible even when the app's own theme override differs from the system.
+        val isLightTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
 
         // Set normal status bar style based on theme
         LaunchedEffect(Unit) {
             enableEdgeToEdge(
                 navigationBarStyle = SystemBarStyle.dark(surfaceContainerColor),
-                statusBarStyle = if (!isDarkTheme) {
+                statusBarStyle = if (isLightTheme) {
                     SystemBarStyle.light(backgroundColor, backgroundColor)
                 } else {
                     SystemBarStyle.dark(backgroundColor)
@@ -1017,10 +965,11 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        // Dynamic status bar controller for photos and album pages
+        // Dynamic status bar controller for photos and album pages (kept always visible, not
+        // hidden on scroll)
         when (currentView.value) {
             DefaultTabs.TabTypes.Gallery -> {
-                DynamicStatusBarController(isVisible = photosScrollVisibilityState.isStatusBarVisible)
+                DynamicStatusBarController(isVisible = true)
             }
             DefaultTabs.TabTypes.search -> {
                 // Search page handles its own status bar controller
@@ -1028,7 +977,7 @@ class MainActivity : ComponentActivity() {
             else -> {
                 // For custom album tabs that use PhotoGrid
                 if (currentView.value.albumPaths.isNotEmpty()) {
-                    DynamicStatusBarController(isVisible = albumScrollVisibilityState.isStatusBarVisible)
+                    DynamicStatusBarController(isVisible = true)
                 } else {
                     // For other tabs, ensure status bar is visible
                     DynamicStatusBarController(isVisible = true)
@@ -1155,7 +1104,6 @@ class MainActivity : ComponentActivity() {
                                         scrollThreshold = 0, // Immediate hiding for album pages
                                         onVisibilityChange = { newState ->
                                             albumScrollVisibilityState = newState
-                                            isTopBarVisible = newState.isAppBarVisible
                                         }
                                     )
 
@@ -1225,7 +1173,6 @@ class MainActivity : ComponentActivity() {
                                         scrollThreshold = 0, // Immediate hiding for Photos screen
                                         onVisibilityChange = { newState ->
                                             photosScrollVisibilityState = newState
-                                            isTopBarVisible = newState.isAppBarVisible
                                         }
                                     )
 
@@ -1263,9 +1210,7 @@ class MainActivity : ComponentActivity() {
                             stateValue == DefaultTabs.TabTypes.albums -> {
                                 AlbumsGridView(
                                     currentView = currentView,
-                                    onBottomBarVisibilityChange = { visible ->
-                                        isBottomBarVisible = visible
-                                    }
+                                    onBottomBarVisibilityChange = { }
                                 )
                             }
 
@@ -1275,12 +1220,8 @@ class MainActivity : ComponentActivity() {
                                 SearchPage(
                                     selectedItemsList = selectedItemsList,
                                     currentView = currentView,
-                                    onTopBarVisibilityChange = { visible ->
-                                        isTopBarVisible = visible
-                                    },
-                                    onBottomBarVisibilityChange = { visible ->
-                                        isBottomBarVisible = visible
-                                    }
+                                    onTopBarVisibilityChange = { },
+                                    onBottomBarVisibilityChange = { }
                                 )
                             }
                         }

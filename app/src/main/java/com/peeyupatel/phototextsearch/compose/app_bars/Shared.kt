@@ -39,7 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -123,7 +122,7 @@ fun FloatingBottomAppBar(
                     spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 )
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     shape = RoundedCornerShape(percent = 35)
                 ),
             contentAlignment = Alignment.Center
@@ -286,8 +285,11 @@ fun DualFunctionTopAppBar(
     navigationIcon: @Composable () -> Unit = @Composable {},
     scrollBehavior: TopAppBarScrollBehavior? = null
 ) {
-    TopAppBarDefaults.topAppBarColors()
     TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface
+        ),
         navigationIcon = navigationIcon,
         title = {
             AnimatedContent(

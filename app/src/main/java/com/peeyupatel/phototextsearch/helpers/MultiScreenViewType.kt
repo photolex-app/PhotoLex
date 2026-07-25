@@ -26,7 +26,8 @@ object Screens {
 	data class SinglePhotoView(
 		val albumInfo: AlbumInfo,
 		val mediaItemId: Long,
-		val loadsFromMainViewModel: Boolean
+		val loadsFromMainViewModel: Boolean,
+		val searchQuery: String = ""
 	) {
 		fun hasSameAlbumsAs(other: List<String>) = albumInfo.paths.toSet() == other.toSet()
 	}

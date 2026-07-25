@@ -160,18 +160,20 @@ class OcrManager(
     /**
      * Start continuous OCR processing for all images
      */
-    fun startContinuousProcessing(batchSize: Int = 50): UUID {
+    suspend fun startContinuousProcessing(batchSize: Int = 50): UUID? {
+        if (database.ocrProgressDao().getProgress()?.isPaused == true) {
+            Log.d(TAG, "startContinuousProcessing called while paused; not starting (respecting user pause)")
+            return null
+        }
+
         Log.d(TAG, "Starting continuous OCR processing with batch size: $batchSize")
 
         // Start foreground service to ensure processing continues in background
         OcrForegroundService.startLatinOcr(context)
 
-        // Update processing status and ensure not paused
-        CoroutineScope(Dispatchers.IO).launch {
-            database.ocrProgressDao().updateProcessingStatus(true)
-            database.ocrProgressDao().updatePausedStatus(false)
-            Log.d(TAG, "Updated processing status to true and paused status to false")
-        }
+        // Update processing status (paused flag is only ever touched by pauseProcessing/resumeProcessing)
+        database.ocrProgressDao().updateProcessingStatus(true)
+        Log.d(TAG, "Updated processing status to true")
 
         val inputData = workDataOf(
             OcrIndexingWorker.KEY_BATCH_SIZE to batchSize,

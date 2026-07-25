@@ -21,11 +21,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -110,7 +112,8 @@ fun SinglePhotoView(
     window: Window,
     viewModel: MultiAlbumViewModel,
     mediaItemId: Long,
-    loadsFromMainViewModel: Boolean
+    loadsFromMainViewModel: Boolean,
+    searchQuery: String = ""
 ) {
     val holderGroupedMedia =
         if (!loadsFromMainViewModel) {
@@ -209,6 +212,27 @@ fun SinglePhotoView(
             modifier = Modifier.fillMaxSize()
         )
         return // Exit early to avoid showing the normal photo viewer
+    }
+
+    // Search-result highlight: only runs when this photo was opened from a search hit.
+    // Reuses the same live OCR extraction the text-selection feature uses, but only to
+    // find and highlight the matched region(s) -- no interactive selection UI is shown.
+    var searchOcrResult by remember { mutableStateOf<com.peeyupatel.phototextsearch.ocr.SelectableOcrResult?>(null) }
+    var searchHighlightContainerSize by remember { mutableStateOf<Size?>(null) }
+
+    LaunchedEffect(currentMediaItem.value.uri, searchQuery) {
+        if (searchQuery.isNotBlank() && currentMediaItem.value.type == MediaType.Image) {
+            searchOcrResult = try {
+                EnhancedOcrExtractor.extractSelectableTextFromImage(
+                    context = context,
+                    imageUri = currentMediaItem.value.uri
+                )
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            searchOcrResult = null
+        }
     }
 
     BackHandler(
@@ -322,13 +346,98 @@ fun SinglePhotoView(
                     groupedMedia = groupedMedia.value,
                     state = state,
                     window = window,
-                    appBarsVisible = appBarsVisible
+                    appBarsVisible = appBarsVisible,
+                    onImageSizeChanged = { containerSize, _ ->
+                        searchHighlightContainerSize = containerSize
+                    }
+                )
+            }
+
+            if (searchQuery.isNotBlank()) {
+                SearchHighlightOverlay(
+                    ocrResult = searchOcrResult,
+                    containerSize = searchHighlightContainerSize,
+                    searchQuery = searchQuery
                 )
             }
 
             // Text selection interface is now handled by the dedicated TextSelectionViewer
             // This code block has been removed and replaced with the TextSelectionViewer above
         }
+    }
+}
+
+/**
+ * Draws light, non-interactive highlight boxes over any OCR text region that matches the
+ * active search query, so a photo opened from a search result visibly shows where the match
+ * was found -- similar to find-in-page highlighting. Reuses the ContentScale.Fit coordinate
+ * math (container size vs. original image size) that HorizontalImageList already reports via
+ * onImageSizeChanged, so highlights line up with the actual displayed image regardless of
+ * screen size or aspect ratio.
+ */
+@Composable
+private fun SearchHighlightOverlay(
+    ocrResult: com.peeyupatel.phototextsearch.ocr.SelectableOcrResult?,
+    containerSize: Size?,
+    searchQuery: String
+) {
+    if (ocrResult == null || containerSize == null || containerSize.width <= 0f || containerSize.height <= 0f) return
+
+    val imageSize = ocrResult.imageSize
+    if (imageSize.width <= 0f || imageSize.height <= 0f) return
+
+    val query = searchQuery.trim()
+    if (query.isEmpty()) return
+
+    val highlightRects = remember(ocrResult, query) {
+        val rects = mutableListOf<androidx.compose.ui.geometry.Rect>()
+        ocrResult.textBlocks.forEach { block ->
+            var matchedAnyElement = false
+            block.getAllElements().forEach { element ->
+                if (element.text.contains(query, ignoreCase = true)) {
+                    rects.add(element.boundingBox)
+                    matchedAnyElement = true
+                }
+            }
+            // Fall back to highlighting the whole block if the query only matches across
+            // multiple words (e.g. a short phrase) rather than any single element.
+            if (!matchedAnyElement && block.text.contains(query, ignoreCase = true)) {
+                rects.add(block.boundingBox)
+            }
+        }
+        rects
+    }
+
+    if (highlightRects.isEmpty()) return
+
+    val scaleFactor = minOf(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+    val displayedWidth = imageSize.width * scaleFactor
+    val displayedHeight = imageSize.height * scaleFactor
+    val offsetX = (containerSize.width - displayedWidth) / 2f
+    val offsetY = (containerSize.height - displayedHeight) / 2f
+
+    // Bold "highlighter pen" yellow (like MS Word / browser find-in-page), not a subtle brand-color tint
+    val highlightColor = androidx.compose.ui.graphics.Color(0xFFFFEB3B).copy(alpha = 0.55f)
+
+    highlightRects.forEach { rect ->
+        // offsetX/offsetY/scaleFactor were all computed against containerSize, which is already
+        // in dp (BoxWithConstraints' maxWidth/maxHeight.value) -- these results are dp magnitudes
+        // already, so wrap them directly with `.dp` rather than `.toDp()` (which is for converting
+        // raw pixels, and would incorrectly shrink/misplace everything by the screen density).
+        val left = offsetX + rect.left * scaleFactor
+        val top = offsetY + rect.top * scaleFactor
+        val width = (rect.right - rect.left) * scaleFactor
+        val height = (rect.bottom - rect.top) * scaleFactor
+
+        if (width <= 0f || height <= 0f) return@forEach
+
+        Box(
+            modifier = Modifier
+                .offset(x = left.dp, y = top.dp)
+                .size(width = width.dp, height = height.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(highlightColor)
+        )
     }
 }
 

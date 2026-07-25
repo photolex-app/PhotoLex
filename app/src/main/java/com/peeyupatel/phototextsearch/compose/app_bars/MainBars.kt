@@ -36,7 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
@@ -246,7 +245,7 @@ fun MainAppBottomBar(
                 .fillMaxSize()
                 .padding(vertical = 7.dp)
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     shape = RoundedCornerShape(percent = 35)
                 ),
             verticalAlignment = Alignment.CenterVertically,
@@ -409,7 +408,7 @@ fun MainAppSelectingBottomBar(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
                     shape = RoundedCornerShape(percent = 35)
                 ),
             verticalAlignment = Alignment.CenterVertically,

@@ -98,7 +98,8 @@ fun SingleAlbumViewTopBar(
         if (!target) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 ),
                 navigationIcon = {
                     IconButton(
@@ -172,7 +173,7 @@ fun SingleAlbumViewTopBar(
                         )
                     }
                 },
-                scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
             )
         } else {
             IsSelectingTopBar(
@@ -376,7 +377,8 @@ fun TrashedPhotoGridViewTopBar(
         if (!target) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 ),
                 navigationIcon = {
                     IconButton(
@@ -566,7 +568,8 @@ fun SecureFolderViewTopAppBar(
         if (!target) {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 ),
                 navigationIcon = {
                     IconButton(
@@ -815,6 +818,10 @@ fun FavouritesViewTopAppBar(
     ) { target ->
         if (!target) {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
                 navigationIcon = {
                     IconButton(
                         onClick = { onBackClick() },

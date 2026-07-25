@@ -144,7 +144,8 @@ fun PhotoGrid(
     modifier: Modifier = Modifier,
     viewProperties: ViewProperties,
     shouldPadUp: Boolean = false,
-    state: LazyGridState = rememberLazyGridState()
+    state: LazyGridState = rememberLazyGridState(),
+    searchQuery: String = ""
 ) {
     val context = LocalContext.current
     var hasFiles: Boolean? by remember { mutableStateOf(null) }
@@ -200,7 +201,8 @@ fun PhotoGrid(
                     viewProperties = viewProperties,
                     shouldPadUp = shouldPadUp,
                     gridState = state,
-                    albumInfo = albumInfo
+                    albumInfo = albumInfo,
+                    searchQuery = searchQuery
                 )
             }
         }
@@ -219,7 +221,8 @@ fun DeviceMedia(
     viewProperties: ViewProperties,
     shouldPadUp: Boolean,
     gridState: LazyGridState,
-    albumInfo: AlbumInfo
+    albumInfo: AlbumInfo,
+    searchQuery: String = ""
 ) {
     var showLoadingSpinner by remember { mutableStateOf(true) }
 
@@ -372,11 +375,13 @@ fun DeviceMedia(
                                 ImageFunctions.LoadNormalImage -> {
                                     // mainViewModel.setGroupedMedia(groupedMedia.value)
 
+                                    val isSearchResult = viewProperties == ViewProperties.SearchLoading || viewProperties == ViewProperties.SearchNotFound
                                     navController.navigate(
                                         Screens.SinglePhotoView(
                                             albumInfo = albumInfo,
                                             mediaItemId = mediaStoreItem.id,
-                                            loadsFromMainViewModel = viewProperties == ViewProperties.SearchLoading || viewProperties == ViewProperties.SearchNotFound || viewProperties == ViewProperties.Favourites
+                                            loadsFromMainViewModel = isSearchResult || viewProperties == ViewProperties.Favourites,
+                                            searchQuery = if (isSearchResult) searchQuery else ""
                                         )
                                     )
                                 }

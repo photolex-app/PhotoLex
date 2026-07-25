@@ -161,30 +161,32 @@ class DevanagariOcrManager(
     /**
      * Start continuous OCR processing for all images
      */
-    fun startContinuousProcessing(batchSize: Int = 50): UUID {
+    suspend fun startContinuousProcessing(batchSize: Int = 50): UUID? {
+        if (database.devanagariOcrProgressDao().getProgress()?.isPaused == true) {
+            Log.d(TAG, "startContinuousProcessing called while paused; not starting (respecting user pause)")
+            return null
+        }
+
         Log.d(TAG, "=== STARTING CONTINUOUS DEVANAGARI OCR PROCESSING ===")
         Log.d(TAG, "Batch size: $batchSize")
 
         // Start foreground service to ensure processing continues in background
         OcrForegroundService.startDevanagariOcr(context)
 
-        // Update processing status and ensure not paused
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                Log.d(TAG, "Verifying database tables exist...")
-                verifyDatabaseTables()
+        // Update processing status (paused flag is only ever touched by pauseProcessing/resumeProcessing)
+        try {
+            Log.d(TAG, "Verifying database tables exist...")
+            verifyDatabaseTables()
 
-                Log.d(TAG, "Updating Devanagari OCR database status...")
-                database.devanagariOcrProgressDao().updateProcessingStatus(true)
-                database.devanagariOcrProgressDao().updatePausedStatus(false)
-                Log.d(TAG, "Successfully updated Devanagari processing status to true and paused status to false")
+            Log.d(TAG, "Updating Devanagari OCR database status...")
+            database.devanagariOcrProgressDao().updateProcessingStatus(true)
+            Log.d(TAG, "Successfully updated Devanagari processing status to true")
 
-                // Verify the update worked
-                val progress = database.devanagariOcrProgressDao().getProgress()
-                Log.d(TAG, "Current progress after update: $progress")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to update Devanagari OCR database status", e)
-            }
+            // Verify the update worked
+            val progress = database.devanagariOcrProgressDao().getProgress()
+            Log.d(TAG, "Current progress after update: $progress")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update Devanagari OCR database status", e)
         }
 
         Log.d(TAG, "Creating work request for Devanagari OCR...")

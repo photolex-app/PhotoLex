@@ -133,8 +133,8 @@ fun SearchPage(
     // Track immersive mode for proper window insets handling
     val isImmersiveMode = !scrollVisibilityState.isAppBarVisible
 
-    // Dynamic status bar controller
-    DynamicStatusBarController(isVisible = scrollVisibilityState.isStatusBarVisible)
+    // Dynamic status bar controller (kept always visible -- see MainActivity.kt for the same fix)
+    DynamicStatusBarController(isVisible = true)
 
     // Auto-collapse filter chips after 10 seconds of inactivity
     LaunchedEffect(showFilterDropdown) {
@@ -285,9 +285,11 @@ fun SearchPage(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Animated search bar container - smooth fade animations
+            // Search bar / OCR progress container - kept fixed on screen; only the
+            // photo grid below scrolls (previously this hid on scroll, which made the
+            // search box and OCR progress indicator hard to see while browsing).
             AnimatedVisibility(
-                visible = scrollVisibilityState.isAppBarVisible,
+                visible = true,
                 enter = fadeIn(animationSpec = tween(400)),
                 exit = fadeOut(animationSpec = tween(400))
             ) {
@@ -306,27 +308,7 @@ fun SearchPage(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-            val placeholdersList = remember {
-                val month = months.random().replaceFirstChar {
-                    it.uppercase()
-                }
-                val day = days.random().replaceFirstChar {
-                    it.uppercase()
-                }
-                val date = (1..31).random()
-                val year = (2016..2024).random()
-
-                listOf(
-                    "Search for a photo's name",
-                    "Search for a specific date",
-                    "$month $date $year",
-                    "$month $year",
-                    "Search by day",
-                    "$day $month $year",
-                    "$date $month $year"
-                )
-            }
-            val placeholder = remember { placeholdersList.random() }
+            val placeholder = "Search text in images"
 
                 SearchBar(
                     query = searchedForText,
@@ -523,7 +505,8 @@ fun SearchPage(
                 selectedItemsList = selectedItemsList,
                 viewProperties = if (searchedForText.value == "") ViewProperties.SearchLoading else ViewProperties.SearchNotFound,
                 state = gridState,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center),
+                searchQuery = searchedForText.value
             )
 
             if (showLoadingSpinner) {

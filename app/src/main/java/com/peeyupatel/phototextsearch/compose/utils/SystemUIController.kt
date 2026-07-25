@@ -8,11 +8,11 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
@@ -104,7 +104,9 @@ fun DynamicStatusBarController(
     isVisible: Boolean,
     systemUIController: SystemUIController = rememberSystemUIController()
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
+    // Use the app's actual resolved theme (not the system's dark-mode setting) so status bar
+    // icons stay visible even when the app's own theme override differs from the system's.
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() <= 0.5f
     val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
     val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer.toArgb()
 

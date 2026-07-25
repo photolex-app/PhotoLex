@@ -1,5 +1,7 @@
 package com.peeyupatel.phototextsearch.compose.single_photo
 
+import com.peeyupatel.phototextsearch.themedStatusBarStyle
+
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ContentValues
@@ -39,7 +41,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -160,15 +161,7 @@ class OpenWithView : ComponentActivity() {
         setContent {
             enableEdgeToEdge(
                 navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                statusBarStyle =
-                if (!isSystemInDarkTheme()) {
-                    SystemBarStyle.light(
-                        MaterialTheme.colorScheme.background.toArgb(),
-                        MaterialTheme.colorScheme.background.toArgb()
-                    )
-                } else {
-                    SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb())
-                }
+                statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
             )
 
             val followDarkTheme =
@@ -224,15 +217,7 @@ class OpenWithView : ComponentActivity() {
                         composable(MultiScreenViewType.OpenWithView.name) {
                             enableEdgeToEdge(
                                 navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                                statusBarStyle =
-                                if (!isSystemInDarkTheme()) {
-                                    SystemBarStyle.light(
-                                        MaterialTheme.colorScheme.background.toArgb(),
-                                        MaterialTheme.colorScheme.background.toArgb()
-                                    )
-                                } else {
-                                    SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb())
-                                }
+                                statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
                             )
 
                             Content(
@@ -244,10 +229,7 @@ class OpenWithView : ComponentActivity() {
                         composable<Screens.EditingScreen> {
                             enableEdgeToEdge(
                                 navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
-                                statusBarStyle = SystemBarStyle.auto(
-                                    MaterialTheme.colorScheme.surfaceContainer.toArgb(),
-                                    MaterialTheme.colorScheme.surfaceContainer.toArgb()
-                                )
+                                statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.surfaceContainer)
                             )
 
                             val screen: Screens.EditingScreen = it.toRoute()
