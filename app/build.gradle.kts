@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -8,6 +10,15 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+// Release signing credentials live in keystore.properties (gitignored, never committed --
+// this is a public repo). Loaded only if present, so a fresh clone without the keystore can
+// still build debug variants; a release build without it simply won't be signed.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.peeyupatel.phototextsearch"
     compileSdk = 35
@@ -16,8 +27,19 @@ android {
         applicationId = "com.peeyupatel.phototextsearch"
         minSdk = 30
         targetSdk = 35
-        versionCode = 103
-        versionName = "v1.1.0"
+
+        // Versioning policy (standard Android/Play Store practice):
+        // - versionCode: plain integer, increment by exactly 1 for every single build
+        //   uploaded to Play Console (release OR internal/beta testing tracks), regardless of
+        //   whether versionName changes. Play Console rejects any upload whose versionCode
+        //   isn't strictly higher than the last one it has seen for this app.
+        // - versionName: semantic versioning (MAJOR.MINOR.PATCH), what users actually see.
+        //   Bump PATCH for bug fixes, MINOR for new user-facing features, MAJOR for a big/
+        //   breaking change in how the app works. Reset to 1.0.0 here for the first real
+        //   Play Store release (previous 103/v1.1.0 was inherited numbering from the original
+        //   Tulsi Gallery fork, not meaningful for PhotoLex's own release history).
+        versionCode = 1
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -41,11 +63,26 @@ android {
         includeInBundle = false
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             // Additional size optimizations
             isDebuggable = false

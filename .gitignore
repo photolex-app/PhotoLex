@@ -50,3 +50,8 @@ Gallery_signed_universal.apk.idsig
 
 # Personal working notes, not part of the published app
 /SESSION_NOTES.md
+
+# Release signing key and credentials -- NEVER commit these. This is a public GPL-3.0 repo;
+# committing the keystore or its passwords would let anyone sign fake "updates" to this app.
+/keystore/
+/keystore.properties
