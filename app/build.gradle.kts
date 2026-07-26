@@ -32,13 +32,22 @@ android {
         // - versionCode: plain integer, increment by exactly 1 for every single build
         //   uploaded to Play Console (release OR internal/beta testing tracks), regardless of
         //   whether versionName changes. Play Console rejects any upload whose versionCode
-        //   isn't strictly higher than the last one it has seen for this app.
+        //   isn't strictly higher than the last one it has seen for this app. Play doesn't
+        //   actually require starting from 1 -- it only enforces that each upload's code is
+        //   higher than the previous one -- so this deliberately continues past the inherited
+        //   Tulsi-fork numbering (103) rather than resetting to 1. A reset to 1 was tried first
+        //   but reverted: Android's own install-time downgrade protection then refused to
+        //   install any new debug build over the test phone's existing versionCode 103 install,
+        //   and the only way past that is a full uninstall, which would wipe the OCR index
+        //   already built up on that device. Continuing the existing numbering avoids that
+        //   entirely and is just as valid for Play Console's first-ever upload of this app.
         // - versionName: semantic versioning (MAJOR.MINOR.PATCH), what users actually see.
         //   Bump PATCH for bug fixes, MINOR for new user-facing features, MAJOR for a big/
-        //   breaking change in how the app works. Reset to 1.0.0 here for the first real
-        //   Play Store release (previous 103/v1.1.0 was inherited numbering from the original
-        //   Tulsi Gallery fork, not meaningful for PhotoLex's own release history).
-        versionCode = 1
+        //   breaking change in how the app works. Reset to 1.0.0 here (versionName has no
+        //   monotonic-increase constraint, unlike versionCode, so this reset is safe) since it
+        //   is PhotoLex's own first real release, not meaningfully related to the inherited
+        //   v1.1.0 label.
+        versionCode = 104
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
