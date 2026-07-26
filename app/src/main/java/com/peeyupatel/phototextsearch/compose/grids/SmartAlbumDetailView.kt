@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -132,7 +133,11 @@ fun SmartAlbumDetailView(
 fun SmartAlbumsRow() {
     val context = LocalContext.current
     var categoryCounts by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    // rememberSaveable, not remember -- tapping a photo inside SmartAlbumDetailView's grid
+    // navigates to a SinglePhotoView on top of this screen, which tears down and later
+    // recreates this composition on back-navigation. Plain remember would reset to null on
+    // that recreation, silently closing the album view instead of reappearing.
+    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val dao = ClassificationDatabase.getInstance(context).photoClassificationDao()

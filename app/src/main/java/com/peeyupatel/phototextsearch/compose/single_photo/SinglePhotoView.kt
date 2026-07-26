@@ -138,10 +138,26 @@ fun SinglePhotoView(
     }
 
     LaunchedEffect(holderGroupedMedia.value) {
-        groupedMedia.value =
-            holderGroupedMedia.value!!.filter { item ->
-                item.type != MediaType.Section
-            }
+        val filtered = holderGroupedMedia.value!!.filter { item ->
+            item.type != MediaType.Section
+        }
+
+        // Guard against a nested flow elsewhere (e.g. the "Find Similar" dialog, which points
+        // the shared mainViewModel.groupedMedia bus at its own results list while open) having
+        // overwritten this shared bus with an unrelated list while this screen was paused in
+        // the back stack. If the new list doesn't even contain the photo this screen was opened
+        // for, it isn't meant for us -- keep this screen's own last-known-good list instead of
+        // jumping to whatever happens to sit at the same index in someone else's list (that was
+        // the actual bug: backing out of a photo opened from "Find Similar" landed on the first
+        // photo of the *search results* instead of returning to this screen's own photo/list).
+        if (loadsFromMainViewModel &&
+            filtered.none { it.id == mediaItemId } &&
+            groupedMedia.value.any { it.id == mediaItemId }
+        ) {
+            return@LaunchedEffect
+        }
+
+        groupedMedia.value = filtered
     }
 
     var currentMediaItemIndex by rememberSaveable {
@@ -711,7 +727,12 @@ private fun BottomBar(
                     }
 
                     if (currentItem.type == MediaType.Image) {
-                        val showFindSimilar = remember { mutableStateOf(false) }
+                        // rememberSaveable, not remember -- tapping a match inside the Find
+                        // Similar grid navigates to a new SinglePhotoView on top of this one,
+                        // which tears down and later recreates this composition when the user
+                        // navigates back. Plain remember would reset to false on that recreation,
+                        // silently closing the results dialog instead of reappearing.
+                        val showFindSimilar = rememberSaveable { mutableStateOf(false) }
                         BottomAppBarItem(
                             text = "Similar",
                             iconResId = R.drawable.search,

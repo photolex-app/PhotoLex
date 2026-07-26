@@ -115,13 +115,15 @@ fun MainAppTopBar(
                         .size(30.dp)
                         .clip(RoundedCornerShape(8.dp))
                 ) {
+                    // A single flat image now (photolex_icon_v5) rather than layered
+                    // background+foreground drawables -- also avoids referencing
+                    // ic_launcher_foreground here, which is now an XML <bitmap> wrapper for the
+                    // adaptive launcher icon; painterResource() only supports true
+                    // VectorDrawables or raw raster files directly, not a <bitmap> XML wrapper
+                    // (crashed with "Only VectorDrawables and rasterized asset types are
+                    // supported" when this still pointed at it).
                     Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_background),
-                        contentDescription = null,
-                        modifier = Modifier.matchParentSize()
-                    )
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        painter = painterResource(id = R.drawable.ic_launcher_photolex),
                         contentDescription = null,
                         modifier = Modifier.matchParentSize()
                     )

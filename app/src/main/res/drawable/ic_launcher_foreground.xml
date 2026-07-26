@@ -1,42 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- PhotoLex mark: magnifying glass framing three text lines (search + text-in-photo) -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- magnifying glass handle -->
-    <path
-        android:strokeColor="#FFA726"
-        android:strokeWidth="7"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M62.7,58.7L74,70"/>
-    <!-- magnifying glass lens ring -->
-    <path
-        android:strokeColor="#FFA726"
-        android:strokeWidth="7"
-        android:fillColor="#00000000"
-        android:pathData="M68,46a18,18 0,1 1,-36 0a18,18 0,1 1,36 0z"/>
-    <!-- text line 1 -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M38,40L62,40"/>
-    <!-- text line 2 -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M37,46L63,46"/>
-    <!-- text line 3 -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:fillColor="#00000000"
-        android:pathData="M40,52L60,52"/>
-</vector>
+<!--
+  PhotoLex app icon (photolex_icon_v5.png), used only as the adaptive-icon foreground layer
+  (in-app UI uses drawable/ic_launcher_photolex directly instead, see MainBars.kt comment).
+  Adaptive icons mask this 108dp x 108dp layer down to a smaller "safe zone" that varies by
+  launcher/OEM shape, and corners get clipped harder than the flat edges. A uniform 10% inset,
+  an earlier attempt at making the artwork bigger per user feedback, pushed the magnifying
+  glass handle (which extends toward the bottom-right corner of the source image) past where
+  the launcher's mask crops, cutting the handle off entirely on the home-screen icon (confirmed:
+  it still rendered fine in-app, where this image is shown flat with no masking). Asymmetric
+  insets fix this without giving back all the size gained: less padding on the top and left
+  (8%, where content doesn't reach the edge anyway) and more on the bottom and right (15%,
+  protecting the handle specifically).
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_photolex"
+    android:insetLeft="8%"
+    android:insetTop="8%"
+    android:insetRight="15%"
+    android:insetBottom="15%" />

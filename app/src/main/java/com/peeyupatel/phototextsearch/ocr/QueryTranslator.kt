@@ -55,7 +55,12 @@ object QueryTranslator {
         val translator = Translation.getClient(options)
 
         return try {
-            val modelReady = isModelDownloaded(targetLanguage)
+            // Translation needs BOTH the source and target language models downloaded (English
+            // is not a free/bundled pivot in ML Kit Translate, it has its own downloadable
+            // model like any other language) -- checking only one side meant a Hindi-to-English
+            // search could silently skip priming the Hindi model if English happened to already
+            // be present, since that direction never checked Hindi at all.
+            val modelReady = isModelDownloaded(sourceLanguage) && isModelDownloaded(targetLanguage)
             if (!modelReady) {
                 // Don't block this search on a multi-second/multi-MB download -- kick it off
                 // in the background for next time, and just skip cross-language search now.

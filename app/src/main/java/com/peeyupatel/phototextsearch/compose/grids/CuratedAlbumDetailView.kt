@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -166,7 +167,13 @@ fun CuratedAlbumsRow() {
     val context = LocalContext.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     var albums by remember { mutableStateOf<List<Pair<CuratedAlbumEntity, Int>>>(emptyList()) }
-    var selectedAlbum by remember { mutableStateOf<CuratedAlbumEntity?>(null) }
+    // rememberSaveable, not remember -- tapping a photo inside CuratedAlbumDetailView's grid
+    // navigates to a SinglePhotoView on top of this screen, which tears down and later
+    // recreates this composition on back-navigation. Plain remember would reset to null on
+    // that recreation, silently closing the album view instead of reappearing. Track just the
+    // id/name primitives (not the whole CuratedAlbumEntity) since those save/restore directly.
+    var selectedAlbumId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selectedAlbumName by rememberSaveable { mutableStateOf<String?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newAlbumName by remember { mutableStateOf("") }
     var refreshTrigger by remember { mutableStateOf(0) }
@@ -178,27 +185,32 @@ fun CuratedAlbumsRow() {
 
     CuratedAlbumsRowContent(
         albums = albums,
-        onAlbumClick = { selectedAlbum = it },
+        onAlbumClick = {
+            selectedAlbumId = it.id
+            selectedAlbumName = it.name
+        },
         onCreateClick = { showCreateDialog = true }
     )
 
-    selectedAlbum?.let { album ->
+    val currentAlbumId = selectedAlbumId
+    val currentAlbumName = selectedAlbumName
+    if (currentAlbumId != null && currentAlbumName != null) {
         Dialog(
             onDismissRequest = {
-                selectedAlbum = null
+                selectedAlbumId = null
                 refreshTrigger++
             },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             CuratedAlbumDetailView(
-                albumId = album.id,
-                albumName = album.name,
+                albumId = currentAlbumId,
+                albumName = currentAlbumName,
                 onBack = {
-                    selectedAlbum = null
+                    selectedAlbumId = null
                     refreshTrigger++
                 },
                 onDeleted = {
-                    selectedAlbum = null
+                    selectedAlbumId = null
                     refreshTrigger++
                 }
             )

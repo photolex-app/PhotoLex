@@ -21,7 +21,10 @@ import android.net.Uri
 import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.UUID
 
 /**
@@ -49,7 +52,6 @@ class DevanagariOcrIndexingWorker(
         
         // Default values
         const val DEFAULT_BATCH_SIZE = 50
-        const val PROCESSING_DELAY_MS = 100L // Small delay between images to prevent overwhelming the system
     }
 
     private val textExtractor = DevanagariOcrTextExtractor(applicationContext)
@@ -96,9 +98,9 @@ class DevanagariOcrIndexingWorker(
      * Category classification after successful extraction, same keyword-based approach and
      * shared table as the Latin worker -- category isn't language-specific.
      */
-    private suspend fun categorizeAfterExtraction(mediaId: Long, extractedText: String) {
+    private suspend fun categorizeAfterExtraction(mediaId: Long, extractedText: String, imageWidth: Int = 0, imageHeight: Int = 0) {
         try {
-            val category = PhotoCategoryClassifier.classify(extractedText)
+            val category = PhotoCategoryClassifier.classify(extractedText, imageWidth, imageHeight)
             val dao = classificationDb.photoClassificationDao()
             val existing = dao.getByMediaId(mediaId)
             dao.upsert(
@@ -326,65 +328,106 @@ class DevanagariOcrIndexingWorker(
             val remainder = unprocessedImages.drop(priorityWindowSize)
             val prioritized = prioritizeByTextPresence(priorityWindow) + remainder
             val imagesToProcess = if (processAll) prioritized else prioritized.take(batchSize)
-            var processedCount = 0
-            var failedCount = 0
+            val processedCount = AtomicInteger(0)
+            val failedCount = AtomicInteger(0)
             var wasPausedMidRun = false
+
+            // Real data from this device: ~61% of photos have zero text at all per the fast
+            // pre-scan (shared with the Latin worker), yet full Devanagari OCR used to run on
+            // every one of them anyway. prioritizeByTextPresence already populated hasText for
+            // everything in priorityWindow, so one batch lookup is enough to skip the expensive
+            // full-resolution OCR call on confidently-no-text photos. Unknown/not-yet-scanned
+            // (null, e.g. the unprioritized remainder) still gets full OCR -- only skips on a
+            // confident answer, never guesses.
+            val hasTextByMediaId = classificationDb.photoClassificationDao()
+                .getByMediaIds(imagesToProcess.map { it.id })
+                .associateBy({ it.mediaId }, { it.hasText })
 
             Log.d(TAG, "Processing ${imagesToProcess.size} images for Devanagari OCR")
 
-            for ((index, imageInfo) in imagesToProcess.withIndex()) {
-                try {
-                    // Check if processing should be paused
+            // Bounded concurrency instead of one-at-a-time processing (see matching comment in
+            // OcrIndexingWorker.kt) -- also drops the old flat 100ms-per-image delay, which was
+            // costing ~28 minutes of pure sleep across a 17k-photo gallery on its own; the
+            // concurrency cap below is the real throttle now.
+            val concurrency = 3
+            val semaphore = Semaphore(concurrency)
+
+            coroutineScope {
+                for ((index, imageInfo) in imagesToProcess.withIndex()) {
+                    // Check if processing should be paused, once per image before dispatching it
                     val currentProgress = database.devanagariOcrProgressDao().getProgress()
                     if (currentProgress?.isPaused == true) {
-                        Log.d(TAG, "Devanagari OCR processing paused, stopping worker")
+                        Log.d(TAG, "Devanagari OCR processing paused, stopping worker (not dispatching further images)")
                         wasPausedMidRun = true
                         break
                     }
 
-                    Log.d(TAG, "Processing Devanagari OCR for image ${index + 1}/${imagesToProcess.size}: ${imageInfo.id}")
+                    semaphore.acquire()
+                    launch {
+                        try {
+                            Log.d(TAG, "Processing Devanagari OCR for image ${index + 1}/${imagesToProcess.size}: ${imageInfo.id}")
 
-                    // Extract text using Devanagari OCR
-                    val ocrResult = textExtractor.extractTextFromImage(imageInfo.uri)
+                            // Skip the expensive full-resolution OCR call entirely when the fast
+                            // pre-scan already confidently found no text.
+                            if (hasTextByMediaId[imageInfo.id] == false) {
+                                val emptyOcrEntity = DevanagariOcrTextEntity(
+                                    mediaId = imageInfo.id,
+                                    extractedText = "",
+                                    extractionTimestamp = System.currentTimeMillis() / 1000,
+                                    confidenceScore = 0.0f,
+                                    textBlocksCount = 0,
+                                    processingTimeMs = 0L
+                                )
+                                database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
+                                processedCount.incrementAndGet()
+                                Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} (pre-scan confirmed no text)")
+                                val skippedTotalProcessed = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+                                database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
+                                return@launch
+                            }
 
-                    when (ocrResult) {
-                        is DevanagariOcrResult.Success -> {
-                            // Save OCR result to database
-                            val ocrEntity = DevanagariOcrTextEntity(
-                                mediaId = imageInfo.id,
-                                extractedText = ocrResult.extractedText,
-                                extractionTimestamp = System.currentTimeMillis() / 1000,
-                                confidenceScore = ocrResult.confidence,
-                                textBlocksCount = ocrResult.textBlocksCount,
-                                processingTimeMs = ocrResult.processingTimeMs
-                            )
+                            // Extract text using Devanagari OCR
+                            val ocrResult = textExtractor.extractTextFromImage(imageInfo.uri)
 
-                            database.devanagariOcrTextDao().insertOcrText(ocrEntity)
-                            categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText)
-                            processedCount++
+                            when (ocrResult) {
+                                is DevanagariOcrResult.Success -> {
+                                    // Save OCR result to database
+                                    val ocrEntity = DevanagariOcrTextEntity(
+                                        mediaId = imageInfo.id,
+                                        extractedText = ocrResult.extractedText,
+                                        extractionTimestamp = System.currentTimeMillis() / 1000,
+                                        confidenceScore = ocrResult.confidence,
+                                        textBlocksCount = ocrResult.textBlocksCount,
+                                        processingTimeMs = ocrResult.processingTimeMs
+                                    )
 
-                            Log.d(TAG, "Successfully processed Devanagari OCR for image ${imageInfo.id}: ${ocrResult.extractedText.length} characters extracted")
-                        }
-                        is DevanagariOcrResult.Error -> {
-                            Log.e(TAG, "Devanagari OCR failed for image ${imageInfo.id}: ${ocrResult.message}")
-                            failedCount++
+                                    database.devanagariOcrTextDao().insertOcrText(ocrEntity)
+                                    categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText, imageInfo.width, imageInfo.height)
+                                    processedCount.incrementAndGet()
+
+                                    Log.d(TAG, "Successfully processed Devanagari OCR for image ${imageInfo.id}: ${ocrResult.extractedText.length} characters extracted")
+                                }
+                                is DevanagariOcrResult.Error -> {
+                                    Log.e(TAG, "Devanagari OCR failed for image ${imageInfo.id}: ${ocrResult.message}")
+                                    failedCount.incrementAndGet()
+                                    database.devanagariOcrProgressDao().incrementFailedCount()
+                                }
+                            }
+
+                            // Update progress
+                            val totalProcessedImages = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+                            database.devanagariOcrProgressDao().updateProcessedCount(totalProcessedImages)
+
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Exception processing Devanagari OCR for image ${imageInfo.id}", e)
+                            failedCount.incrementAndGet()
                             database.devanagariOcrProgressDao().incrementFailedCount()
+                        } finally {
+                            semaphore.release()
                         }
                     }
-
-                    // Update progress
-                    val totalProcessedImages = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
-                    database.devanagariOcrProgressDao().updateProcessedCount(totalProcessedImages)
-
-                    // Small delay to prevent overwhelming the system
-                    delay(PROCESSING_DELAY_MS)
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "Exception processing Devanagari OCR for image ${imageInfo.id}", e)
-                    failedCount++
-                    database.devanagariOcrProgressDao().incrementFailedCount()
                 }
-            }
+            } // coroutineScope waits here for all launched (in-flight) images to finish
 
             // Update final processing status. This must also cover the "paused mid-continuous-run"
             // case (wasPausedMidRun) -- without it, isProcessing stays true forever after a pause
@@ -399,11 +442,11 @@ class DevanagariOcrIndexingWorker(
                 Log.d(TAG, "Devanagari OCR batch processing completed or paused")
             }
 
-            Log.d(TAG, "Devanagari OCR batch processing finished: $processedCount processed, $failedCount failed")
+            Log.d(TAG, "Devanagari OCR batch processing finished: ${processedCount.get()} processed, ${failedCount.get()} failed")
 
             return Result.success(workDataOf(
-                KEY_TOTAL_PROCESSED to processedCount,
-                KEY_PROGRESS to "Processed $processedCount images, $failedCount failed"
+                KEY_TOTAL_PROCESSED to processedCount.get(),
+                KEY_PROGRESS to "Processed ${processedCount.get()} images, ${failedCount.get()} failed"
             ))
 
         } catch (e: Exception) {
@@ -425,7 +468,9 @@ class DevanagariOcrIndexingWorker(
             val projection = arrayOf(
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DATA,
-                MediaStore.Images.Media.DISPLAY_NAME
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.WIDTH,
+                MediaStore.Images.Media.HEIGHT
             )
 
             val cursor = applicationContext.contentResolver.query(
@@ -440,18 +485,22 @@ class DevanagariOcrIndexingWorker(
                 val idColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
                 val dataColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
                 val nameColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+                val widthColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.WIDTH)
+                val heightColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.HEIGHT)
 
                 while (it.moveToNext()) {
                     val id = it.getLong(idColumn)
                     val data = it.getString(dataColumn)
                     val name = it.getString(nameColumn)
+                    val width = it.getInt(widthColumn)
+                    val height = it.getInt(heightColumn)
 
                     val uri = Uri.withAppendedPath(
                         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                         id.toString()
                     )
 
-                    images.add(ImageInfo(id, uri, name, data))
+                    images.add(ImageInfo(id, uri, name, data, width, height))
                 }
             }
 
@@ -469,6 +518,8 @@ class DevanagariOcrIndexingWorker(
         val id: Long,
         val uri: Uri,
         val name: String,
-        val path: String
+        val path: String,
+        val width: Int = 0,
+        val height: Int = 0
     )
 }
