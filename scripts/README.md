@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains build scripts and utility tools for the Tulsi Gallery project.
+This directory contains build scripts and utility tools for the PhotoLex project.
 
 ## 📁 Scripts Overview
 
@@ -115,7 +115,7 @@ python scripts/fix_image.py
 ### Building a Release APK
 ```bash
 # Navigate to project root
-cd /path/to/Tulsi
+cd /path/to/PhotoLex
 
 # Run build script
 ./scripts/build.sh release
@@ -126,7 +126,7 @@ cd /path/to/Tulsi
 ### Fixing Package Names During Development
 ```powershell
 # Navigate to project root
-cd C:\Users\AKS\StudioProjects\Tulsi
+cd C:\peeyu\Claude_Projects\PhotoTextSearch
 
 # Run package fix script
 .\scripts\fix_packages.ps1
@@ -135,7 +135,7 @@ cd C:\Users\AKS\StudioProjects\Tulsi
 ### Optimizing Images
 ```python
 # Navigate to project root
-cd /path/to/Tulsi
+cd /path/to/PhotoLex
 
 # Run image optimization
 python scripts/fix_image.py

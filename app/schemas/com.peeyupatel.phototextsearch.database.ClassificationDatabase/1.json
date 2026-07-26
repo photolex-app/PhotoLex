@@ -1,0 +1,73 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "5b136258e53b6bfc6c0ac2e6f46c341a",
+    "entities": [
+      {
+        "tableName": "photo_classification",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`media_id` INTEGER NOT NULL, `has_text` INTEGER NOT NULL, `pre_scanned_at` INTEGER NOT NULL, `category` TEXT, `categorized_at` INTEGER, PRIMARY KEY(`media_id`))",
+        "fields": [
+          {
+            "fieldPath": "mediaId",
+            "columnName": "media_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasText",
+            "columnName": "has_text",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preScannedAt",
+            "columnName": "pre_scanned_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "categorizedAt",
+            "columnName": "categorized_at",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "media_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_photo_classification_has_text",
+            "unique": false,
+            "columnNames": [
+              "has_text"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_photo_classification_has_text` ON `${TABLE_NAME}` (`has_text`)"
+          },
+          {
+            "name": "index_photo_classification_category",
+            "unique": false,
+            "columnNames": [
+              "category"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_photo_classification_category` ON `${TABLE_NAME}` (`category`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5b136258e53b6bfc6c0ac2e6f46c341a')"
+    ]
+  }
+}

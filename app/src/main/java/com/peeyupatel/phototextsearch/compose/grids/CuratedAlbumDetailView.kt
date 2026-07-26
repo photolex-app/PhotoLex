@@ -1,0 +1,296 @@
+package com.peeyupatel.phototextsearch.compose.grids
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
+import com.peeyupatel.phototextsearch.compose.ViewProperties
+import com.peeyupatel.phototextsearch.database.ClassificationDatabase
+import com.peeyupatel.phototextsearch.database.entities.CuratedAlbumEntity
+import com.peeyupatel.phototextsearch.datastore.AlbumInfo
+import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
+import com.peeyupatel.phototextsearch.models.curated_album.CuratedAlbumViewModel
+import com.peeyupatel.phototextsearch.models.curated_album.CuratedAlbumViewModelFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+/**
+ * Full-screen browsing view for a single user-created Curated Album -- photos are tagged
+ * membership rows (CuratedAlbumPhotoEntity), never copies, so removing a photo here only
+ * removes the tag, it stays untouched in the real gallery.
+ */
+@Composable
+fun CuratedAlbumDetailView(
+    albumId: Long,
+    albumName: String,
+    onBack: () -> Unit,
+    onDeleted: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val viewModel: CuratedAlbumViewModel = viewModel(
+        factory = CuratedAlbumViewModelFactory(context, albumId)
+    )
+
+    val liveMedia by viewModel.mediaFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val groupedMedia = remember { mutableStateOf<List<MediaStoreData>>(emptyList()) }
+
+    LaunchedEffect(liveMedia) {
+        groupedMedia.value = liveMedia
+        mainViewModel.setGroupedMedia(liveMedia)
+    }
+
+    val selectedItemsList = remember { mutableStateListOf<MediaStoreData>() }
+    val gridState = rememberLazyGridState()
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+            }
+            Text(
+                text = albumName,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete album")
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (groupedMedia.value.isEmpty()) {
+                Text(
+                    text = "No photos in this album yet.",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(32.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                PhotoGrid(
+                    groupedMedia = groupedMedia,
+                    albumInfo = AlbumInfo.createPathOnlyAlbum(emptyList()),
+                    selectedItemsList = selectedItemsList,
+                    viewProperties = ViewProperties.SmartAlbum,
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete \"$albumName\"?") },
+            text = { Text("This only removes the album -- your photos are not deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        ClassificationDatabase.getInstance(context).curatedAlbumDao().deleteAlbum(albumId)
+                    }
+                    showDeleteDialog = false
+                    onDeleted()
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * "My Albums" row shown on the Albums tab, alongside SmartAlbumsRow -- one card per
+ * user-created Curated Album with a live photo count, plus a "+ New" card that lets the user
+ * create an empty album up front (photos get added to it later via Find Similar or a photo
+ * picker). Manages its own dialog state, so this is a single additive composable call.
+ */
+@Composable
+fun CuratedAlbumsRow() {
+    val context = LocalContext.current
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    var albums by remember { mutableStateOf<List<Pair<CuratedAlbumEntity, Int>>>(emptyList()) }
+    var selectedAlbum by remember { mutableStateOf<CuratedAlbumEntity?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newAlbumName by remember { mutableStateOf("") }
+    var refreshTrigger by remember { mutableStateOf(0) }
+
+    LaunchedEffect(refreshTrigger) {
+        val dao = ClassificationDatabase.getInstance(context).curatedAlbumDao()
+        albums = dao.getAllAlbums().map { it to dao.getPhotoCount(it.id) }
+    }
+
+    CuratedAlbumsRowContent(
+        albums = albums,
+        onAlbumClick = { selectedAlbum = it },
+        onCreateClick = { showCreateDialog = true }
+    )
+
+    selectedAlbum?.let { album ->
+        Dialog(
+            onDismissRequest = {
+                selectedAlbum = null
+                refreshTrigger++
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            CuratedAlbumDetailView(
+                albumId = album.id,
+                albumName = album.name,
+                onBack = {
+                    selectedAlbum = null
+                    refreshTrigger++
+                },
+                onDeleted = {
+                    selectedAlbum = null
+                    refreshTrigger++
+                }
+            )
+        }
+    }
+
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("New Album") },
+            text = {
+                OutlinedTextField(
+                    value = newAlbumName,
+                    onValueChange = { newAlbumName = it },
+                    label = { Text("Album name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newAlbumName.trim()
+                    if (name.isNotEmpty()) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            ClassificationDatabase.getInstance(context).curatedAlbumDao().insertAlbum(
+                                CuratedAlbumEntity(name = name, createdAt = System.currentTimeMillis() / 1000)
+                            )
+                            refreshTrigger++
+                        }
+                    }
+                    showCreateDialog = false
+                    newAlbumName = ""
+                }) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CuratedAlbumsRowContent(
+    albums: List<Pair<CuratedAlbumEntity, Int>>,
+    onAlbumClick: (CuratedAlbumEntity) -> Unit,
+    onCreateClick: () -> Unit
+) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+    ) {
+        item {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable { onCreateClick() }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "New Album")
+                Text(
+                    text = "New Album",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        items(albums) { (album, count) ->
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable { onAlbumClick(album) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = album.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "$count photo${if (count == 1) "" else "s"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}

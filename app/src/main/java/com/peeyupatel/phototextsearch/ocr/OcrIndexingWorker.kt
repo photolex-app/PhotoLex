@@ -6,12 +6,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.Migration3to4
 import com.peeyupatel.phototextsearch.database.Migration4to5
 import com.peeyupatel.phototextsearch.database.Migration5to6
 import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
+import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntity
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import android.provider.MediaStore
@@ -60,6 +62,78 @@ class OcrIndexingWorker(
     private val ocrExtractor by lazy {
         OcrTextExtractor(applicationContext)
     }
+
+    private val classificationDb by lazy {
+        ClassificationDatabase.getInstance(applicationContext)
+    }
+
+    private val preScanner by lazy {
+        FastTextPreScanner(applicationContext)
+    }
+
+    /**
+     * Ensure a fast text-presence pre-scan exists for this candidate pool, then return the
+     * same list of ImageInfo reordered so has-text photos come first -- so a user's actually-
+     * searchable results (documents/receipts/screenshots) appear within minutes instead of
+     * after processing the whole gallery at equal priority, since a large fraction of any
+     * gallery (selfies, landscapes) has no text and doesn't need to block that.
+     */
+    private suspend fun prioritizeByTextPresence(candidates: List<ImageInfo>): List<ImageInfo> {
+        if (candidates.isEmpty()) return candidates
+
+        val classificationDao = classificationDb.photoClassificationDao()
+        val existing = classificationDao.getByMediaIds(candidates.map { it.id }).associateBy { it.mediaId }
+
+        // Pre-scan any candidates that don't have a record yet (best-effort -- a failed/unknown
+        // scan just leaves that photo unprioritized this round, it'll still get processed).
+        for (candidate in candidates) {
+            if (!existing.containsKey(candidate.id)) {
+                val hasText = try {
+                    preScanner.hasTextOrNull(candidate.uri)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Pre-scan threw for ${candidate.id}: ${e.message}")
+                    null
+                }
+                if (hasText != null) {
+                    classificationDao.upsert(
+                        PhotoClassificationEntity(
+                            mediaId = candidate.id,
+                            hasText = hasText,
+                            preScannedAt = System.currentTimeMillis() / 1000
+                        )
+                    )
+                }
+            }
+        }
+
+        val refreshed = classificationDao.getByMediaIds(candidates.map { it.id }).associateBy { it.mediaId }
+        return candidates.sortedByDescending { refreshed[it.id]?.hasText == true }
+    }
+
+    /**
+     * After a successful full OCR extraction, run the lightweight keyword-based category
+     * classifier on the extracted text and persist the result for Smart Albums browsing.
+     * Zero extra OCR cost -- the text is already extracted, this just pattern-matches it.
+     */
+    private suspend fun categorizeAfterExtraction(mediaId: Long, extractedText: String) {
+        try {
+            val category = PhotoCategoryClassifier.classify(extractedText)
+            val classificationDao = classificationDb.photoClassificationDao()
+            val existing = classificationDao.getByMediaId(mediaId)
+            classificationDao.upsert(
+                (existing ?: PhotoClassificationEntity(
+                    mediaId = mediaId,
+                    hasText = extractedText.isNotBlank(),
+                    preScannedAt = System.currentTimeMillis() / 1000
+                )).copy(
+                    category = category,
+                    categorizedAt = System.currentTimeMillis() / 1000
+                )
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Category classification failed for $mediaId: ${e.message}")
+        }
+    }
     
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
@@ -88,6 +162,7 @@ class OcrIndexingWorker(
             Result.failure(workDataOf(KEY_ERRORS to e.message))
         } finally {
             ocrExtractor.cleanup()
+            preScanner.cleanup()
         }
     }
     
@@ -122,7 +197,8 @@ class OcrIndexingWorker(
                     )
                     
                     database.ocrTextDao().insertOcrText(ocrEntity)
-                    
+                    categorizeAfterExtraction(mediaId, ocrResult.extractedText)
+
                     Log.d(TAG, "Successfully processed image $mediaId: ${ocrResult.extractedText.length} characters extracted")
                     
                     Result.success(workDataOf(
@@ -248,9 +324,13 @@ class OcrIndexingWorker(
             val totalAvailable = getTotalImageCount()
             Log.d(TAG, "Total images available in MediaStore: $totalAvailable")
 
-            // Get unprocessed images from MediaStore
-            val unprocessedImages = getUnprocessedImages(processedMediaIds, batchSize)
-            Log.d(TAG, "Found ${unprocessedImages.size} unprocessed images to process")
+            // Get unprocessed images from MediaStore -- fetch a larger candidate pool than the
+            // actual batch size so there's something meaningful to reorder by text-presence
+            // priority within (capped to keep the MediaStore query and pre-scan pass bounded).
+            val candidatePoolSize = minOf(batchSize * 4, 400)
+            val candidatePool = getUnprocessedImages(processedMediaIds, candidatePoolSize)
+            val unprocessedImages = prioritizeByTextPresence(candidatePool).take(batchSize)
+            Log.d(TAG, "Found ${unprocessedImages.size} unprocessed images to process (from a pool of ${candidatePool.size}, prioritized by text presence)")
 
             if (unprocessedImages.isEmpty()) {
                 Log.d(TAG, "No unprocessed images found using normal method")
@@ -275,12 +355,25 @@ class OcrIndexingWorker(
 
             var processedCount = 0
             var errorCount = 0
+            var wasPausedMidRun = false
 
             // Update progress tracking
             updateProgressInDatabase(0, unprocessedImages.size, true)
 
             for ((index, imageInfo) in unprocessedImages.withIndex()) {
                 try {
+                    // Check if processing should be paused -- without this, a batch already
+                    // mid-flight when the user hits pause would keep running to completion and
+                    // its own per-image progress update below (hardcoded isProcessing=true) would
+                    // overwrite pauseProcessing()'s isProcessing=false back to true on the very
+                    // next image, making the notification/UI keep showing "running" after pause.
+                    val currentProgress = database.ocrProgressDao().getProgress()
+                    if (currentProgress?.isPaused == true) {
+                        Log.d(TAG, "OCR processing paused, stopping worker")
+                        wasPausedMidRun = true
+                        break
+                    }
+
                     Log.d(TAG, "Processing image ${index + 1}/${unprocessedImages.size}: ${imageInfo.id}")
 
                     // Check if already processed (double-check)
@@ -307,6 +400,7 @@ class OcrIndexingWorker(
                             )
 
                             database.ocrTextDao().insertOcrText(ocrEntity)
+                            categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText)
                             processedCount++
 
                             Log.d(TAG, "Successfully processed image ${imageInfo.id}: ${ocrResult.extractedText.length} characters extracted")
@@ -339,12 +433,15 @@ class OcrIndexingWorker(
                 }
             }
 
-            // Mark processing as complete if we processed all available images
+            // Mark processing as complete if we processed all available images, or if we stopped
+            // early because the user paused -- otherwise isProcessing would stay true (this
+            // branch was previously only reached on true 100% completion, so a mid-batch pause
+            // left isProcessing stuck at true, showing "running" in the notification/UI forever).
             val totalImages = getTotalImageCount()
             val totalProcessed = database.ocrTextDao().getAllProcessedMediaIds().size
-            if (totalProcessed >= totalImages) {
+            if (totalProcessed >= totalImages || wasPausedMidRun) {
                 updateProgressInDatabase(totalProcessed, totalImages, false)
-                Log.d(TAG, "All images processed! Total: $totalProcessed")
+                Log.d(TAG, "All images processed or paused! Total: $totalProcessed")
             }
 
             Log.d(TAG, "Batch processing completed: $processedCount processed, $errorCount errors")
@@ -440,6 +537,7 @@ class OcrIndexingWorker(
                         )
 
                         database.ocrTextDao().insertOcrText(ocrEntity)
+                        categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText)
                         processedCount++
 
                         Log.d(TAG, "Successfully processed fallback image ${imageInfo.id}: ${ocrResult.extractedText.length} characters extracted")

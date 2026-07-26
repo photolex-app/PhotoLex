@@ -56,6 +56,9 @@ interface DevanagariOcrTextDao {
     
     @Query("SELECT media_id FROM devanagari_ocr_text")
     suspend fun getAllProcessedMediaIds(): List<Long>
+
+    @Query("SELECT media_id AS mediaId, extracted_text AS extractedText FROM devanagari_ocr_text")
+    suspend fun getAllMediaIdAndText(): List<MediaTextRow>
     
     @Query("SELECT AVG(confidence_score) FROM devanagari_ocr_text")
     suspend fun getAverageConfidenceScore(): Float?

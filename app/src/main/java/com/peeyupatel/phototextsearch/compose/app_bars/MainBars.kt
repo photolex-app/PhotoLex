@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,6 +13,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,12 +42,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -76,7 +86,9 @@ import com.peeyupatel.phototextsearch.helpers.setTrashedOnPhotoList
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 import android.util.Log
 
 private const val TAG = "BOTTOM_BAR_ANIMATION"
@@ -135,6 +147,10 @@ fun MainAppTopBar(
                     color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Center
                 )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                TextExtractionAnimation()
             }
         },
         actions = {
@@ -231,6 +247,188 @@ fun MainAppTopBar(
         },
         scrollBehavior = scrollBehavior
     )
+}
+
+/**
+ * One flying character particle in [TextExtractionAnimation]'s smoke-like burst -- randomized
+ * once per particle (fixed seed) so the layout doesn't reshuffle every recomposition.
+ */
+private data class SmokeCharParticle(
+    val char: String,
+    val startXFraction: Float,
+    val riseDistanceFraction: Float,
+    val driftDirectionBias: Float,
+    val driftAmplitude: Float,
+    val driftFrequency: Float,
+    val driftPhaseSeed: Float,
+    val rotationDegrees: Float,
+    val phaseOffset: Float,
+    val sizeFraction: Float
+)
+
+/**
+ * Small, restrained animated glyph shown beside the "PhotoLex" wordmark: a document shape that
+ * periodically bursts a few random characters/letters upward like smoke -- drifting and wobbling
+ * in varied directions rather than a straight line, rotating slightly, then fading out (evoking
+ * "text extracted from a photo"), plus a faint shimmer sweep timed with the rise, echoing the
+ * magnifying-glass motif from the app's own launcher icon. Loops quietly every ~5s -- most of the
+ * cycle is a still, idle pause, with only a brief ~900ms motion -- and can be replayed on demand
+ * by tapping it. Uses a LaunchedEffect-driven while(true) loop rather than an ever-running
+ * infiniteTransition; Compose automatically cancels this coroutine when the composable leaves
+ * composition (e.g. this app bar isn't on screen), so it doesn't run/drain battery when not visible.
+ */
+@Composable
+private fun TextExtractionAnimation(
+    modifier: Modifier = Modifier
+) {
+    val scope = rememberCoroutineScope()
+    var replayTrigger by remember { mutableIntStateOf(0) }
+    val riseProgress = remember { Animatable(0f) }
+    val shimmerProgress = remember { Animatable(0f) }
+
+    LaunchedEffect(replayTrigger) {
+        while (true) {
+            riseProgress.snapTo(0f)
+            shimmerProgress.snapTo(0f)
+            // Static hold: the characters sit visibly on the photo glyph, unmoving, before the
+            // fly-away motion starts -- so the user first registers "this photo has text on it."
+            delay(1200)
+            launch {
+                shimmerProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 3600, easing = FastOutSlowInEasing)
+                )
+            }
+            riseProgress.animateTo(
+                targetValue = 1f,
+                // Much slower -- explicitly requested, since the small size made fast motion
+                // unreadable. The characters should be clearly followable, not a blur.
+                animationSpec = tween(durationMillis = 3600, easing = FastOutSlowInEasing)
+            )
+            delay(2500) // brief still pause before the next slow burst
+        }
+    }
+
+    // Lighter/more muted than the full-strength primary color -- using the same solid brand color
+    // as the actual app icon right next to it made this look like a second, redundant app icon.
+    val glyphColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    // Use onPrimary (not tertiary) for the flying characters: in dark theme, tertiary is just a
+    // lighter shade of the same amber as primary, so they were nearly invisible against their own
+    // background. onPrimary is guaranteed to contrast against primary in both themes.
+    val charColor = MaterialTheme.colorScheme.onPrimary
+    val shimmerColor = MaterialTheme.colorScheme.onPrimary
+
+    // Each particle is a single character that drifts up and out like smoke -- not a straight
+    // line, a randomized direction/wobble/rotation per particle, generated once (fixed seed) so
+    // the layout doesn't reshuffle on every recomposition, just looks organically varied.
+    val particles = remember {
+        val charPool = listOf("A", "a", "1", "T", "e", "अ", "२")
+        val random = Random(42)
+        List(5) {
+            SmokeCharParticle(
+                char = charPool[random.nextInt(charPool.size)],
+                startXFraction = 0.25f + random.nextFloat() * 0.5f,
+                riseDistanceFraction = 1.0f + random.nextFloat() * 0.6f,
+                driftDirectionBias = (random.nextFloat() - 0.5f) * 0.7f,
+                driftAmplitude = 0.10f + random.nextFloat() * 0.10f,
+                driftFrequency = 1.2f + random.nextFloat() * 1.3f,
+                driftPhaseSeed = random.nextFloat() * 6.28f,
+                rotationDegrees = (random.nextFloat() - 0.5f) * 140f,
+                phaseOffset = random.nextFloat() * 0.3f,
+                sizeFraction = 0.34f + random.nextFloat() * 0.12f
+            )
+        }
+    }
+
+    val textPaint = remember {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                scope.launch {
+                    replayTrigger++
+                }
+            }
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val w = size.width
+            val h = size.height
+
+            drawRoundRect(
+                color = glyphColor,
+                cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+            )
+
+            // Permanent (non-animated) little "photo" glyph -- a classic sun+mountain image
+            // placeholder icon -- so the shape reads as "this is a photo" at a glance, with the
+            // text/character burst animating on top of it and vanishing, leaving the clean photo
+            // glyph visible again in between cycles.
+            drawCircle(
+                color = charColor.copy(alpha = 0.85f),
+                radius = h * 0.12f,
+                center = Offset(w * 0.28f, h * 0.28f)
+            )
+            val mountainPath = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.12f, h * 0.78f)
+                lineTo(w * 0.40f, h * 0.48f)
+                lineTo(w * 0.58f, h * 0.68f)
+                lineTo(w * 0.72f, h * 0.52f)
+                lineTo(w * 0.90f, h * 0.78f)
+                close()
+            }
+            drawPath(
+                path = mountainPath,
+                color = charColor.copy(alpha = 0.85f)
+            )
+
+            if (shimmerProgress.value > 0f && shimmerProgress.value < 1f) {
+                val sweepX = w * shimmerProgress.value * 1.6f - w * 0.3f
+                drawLine(
+                    color = shimmerColor.copy(alpha = 0.22f * (1f - shimmerProgress.value)),
+                    start = Offset(sweepX, 0f),
+                    end = Offset(sweepX - h * 0.5f, h),
+                    strokeWidth = w * 0.22f
+                )
+            }
+
+            particles.forEach { particle ->
+                // Staggered start (phaseOffset) so particles don't all move in lockstep.
+                val p = ((riseProgress.value - particle.phaseOffset) / (1f - particle.phaseOffset))
+                    .coerceIn(0f, 1f)
+                if (p <= 0f) return@forEach
+
+                // Smoke-like path: rises while wobbling side to side (sine wave) plus an overall
+                // directional bias, instead of a straight vertical/horizontal line.
+                val riseOffset = p * h * particle.riseDistanceFraction
+                val wobble = kotlin.math.sin(p * particle.driftFrequency * 6.28f + particle.driftPhaseSeed) *
+                    particle.driftAmplitude * w
+                val directionalDrift = particle.driftDirectionBias * p * w * 0.5f
+                val xPos = w * particle.startXFraction + wobble + directionalDrift
+                val yPos = h * 0.85f - riseOffset
+
+                // Same "hold, then fade in the last 40%" timing already tuned earlier.
+                val alpha = (1f - ((p - 0.6f) / 0.4f).coerceIn(0f, 1f))
+                if (alpha <= 0.02f) return@forEach
+
+                rotate(degrees = particle.rotationDegrees * p, pivot = Offset(xPos, yPos)) {
+                    drawContext.canvas.nativeCanvas.apply {
+                        textPaint.color = charColor.copy(alpha = alpha).toArgb()
+                        textPaint.textSize = h * particle.sizeFraction
+                        drawText(particle.char, xPos, yPos, textPaint)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
@@ -111,10 +113,11 @@ fun FloatingBottomAppBar(
             .background(Color.Transparent),
         contentAlignment = Alignment.Center
     ) {
-        // Floating bottom bar container
+        // Floating bottom bar container -- smaller and more translucent than before, since the
+        // icons themselves are small and the bar was taking up more visual weight than needed.
         Box(
             modifier = Modifier
-                .height(76.dp)
+                .height(62.dp)
                 .fillMaxWidth(0.95f)
                 .shadow(
                     elevation = 8.dp,
@@ -122,7 +125,7 @@ fun FloatingBottomAppBar(
                     spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                 )
                 .background(
-                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f),
                     shape = RoundedCornerShape(percent = 35)
                 ),
             contentAlignment = Alignment.Center
@@ -196,8 +199,14 @@ fun BottomAppBarItem(
             text = text,
             fontSize = TextUnit(textSize, TextUnitType.Sp),
             color = MaterialTheme.colorScheme.onSurface,
+            // Constrained to the button's own width (was wrapContentSize(), letting long labels
+            // like "Secure"/"Copy Text" overflow past their slot and visually overlap the
+            // neighboring button) -- now centered and truncated with an ellipsis instead.
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
-                .wrapContentSize()
+                .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(Color.Transparent)
         )

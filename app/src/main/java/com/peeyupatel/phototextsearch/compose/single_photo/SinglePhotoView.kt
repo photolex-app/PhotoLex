@@ -82,6 +82,10 @@ import com.peeyupatel.phototextsearch.compose.dialogs.SinglePhotoInfoDialog
 import com.peeyupatel.phototextsearch.compose.text_selection.TextSelectionState
 import com.peeyupatel.phototextsearch.compose.text_selection.rememberTextSelectionState
 import com.peeyupatel.phototextsearch.compose.text_selection.TextSelectionViewer
+import com.peeyupatel.phototextsearch.compose.text_selection.rememberTextClipboardManager
+import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarController
+import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarEvents
+import androidx.compose.material3.SnackbarDuration
 import com.peeyupatel.phototextsearch.ocr.EnhancedOcrExtractor
 import com.peeyupatel.phototextsearch.datastore.Permissions
 import com.peeyupatel.phototextsearch.helpers.GetDirectoryPermissionAndRun
@@ -102,6 +106,7 @@ import com.peeyupatel.phototextsearch.models.favourites_grid.FavouritesViewModel
 import com.peeyupatel.phototextsearch.models.favourites_grid.FavouritesViewModelFactory
 import com.peeyupatel.phototextsearch.models.multi_album.MultiAlbumViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 // private const val TAG = "SINGLE_PHOTO_VIEW"
 
@@ -632,6 +637,8 @@ private fun BottomBar(
         ) { width -> width } + fadeOut(),
     ) {
         val context = LocalContext.current
+        val copyTextCoroutineScope = rememberCoroutineScope()
+        val clipboardManager = rememberTextClipboardManager()
 
         FloatingBottomAppBar {
             Row(
@@ -655,6 +662,74 @@ private fun BottomBar(
                             shareImage(currentItem.uri, context)
                         }
                     )
+
+                    if (currentItem.type == MediaType.Image) {
+                        BottomAppBarItem(
+                            text = "Copy",
+                            iconResId = R.drawable.copy,
+                            cornerRadius = 32.dp,
+                            action = {
+                                copyTextCoroutineScope.launch {
+                                    val ocrResult = try {
+                                        EnhancedOcrExtractor.extractSelectableTextFromImage(
+                                            context = context,
+                                            imageUri = currentItem.uri
+                                        )
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+
+                                    val extractedText = ocrResult?.fullText?.trim()
+
+                                    if (extractedText.isNullOrBlank()) {
+                                        LavenderSnackbarController.pushEvent(
+                                            LavenderSnackbarEvents.MessageEvent(
+                                                message = "No text found in this photo",
+                                                iconResId = R.drawable.error_2,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        )
+                                    } else {
+                                        clipboardManager.copyTextToClipboard(
+                                            text = extractedText,
+                                            label = "Extracted Text",
+                                            showToast = false,
+                                            showSnackbar = false
+                                        )
+
+                                        LavenderSnackbarController.pushEvent(
+                                            LavenderSnackbarEvents.MessageEvent(
+                                                message = "Copied all text from photo",
+                                                iconResId = R.drawable.check_item,
+                                                duration = SnackbarDuration.Short
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (currentItem.type == MediaType.Image) {
+                        val showFindSimilar = remember { mutableStateOf(false) }
+                        BottomAppBarItem(
+                            text = "Similar",
+                            iconResId = R.drawable.search,
+                            cornerRadius = 32.dp,
+                            action = { showFindSimilar.value = true }
+                        )
+                        if (showFindSimilar.value) {
+                            androidx.compose.ui.window.Dialog(
+                                onDismissRequest = { showFindSimilar.value = false },
+                                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                            ) {
+                                com.peeyupatel.phototextsearch.compose.grids.FindSimilarResultsView(
+                                    sourceMediaId = currentItem.id,
+                                    onBack = { showFindSimilar.value = false }
+                                )
+                            }
+                        }
+                    }
 
                     val showNotImplementedDialog = remember { mutableStateOf(false) }
 

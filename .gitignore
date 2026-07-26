@@ -47,3 +47,6 @@ Gallery_signed_universal.apk.idsig
 
 # Claude Code local project settings
 /.claude/
+
+# Personal working notes, not part of the published app
+/SESSION_NOTES.md

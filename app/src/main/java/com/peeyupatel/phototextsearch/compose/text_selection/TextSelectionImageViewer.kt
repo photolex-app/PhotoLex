@@ -225,7 +225,7 @@ fun TextSelectionImageViewer(
                 modifier = Modifier
                     .height(48.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = RoundedCornerShape(32.dp)
                     )
             )
@@ -235,7 +235,7 @@ fun TextSelectionImageViewer(
                 onClick = onBackPressed,
                 modifier = Modifier
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp), // Exact FloatingBottomAppBar color
+                        color = MaterialTheme.colorScheme.surfaceContainer, // Exact FloatingBottomAppBar color
                         shape = CircleShape
                     )
                     .size(48.dp)

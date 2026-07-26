@@ -6,12 +6,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.Migration3to4
 import com.peeyupatel.phototextsearch.database.Migration4to5
 import com.peeyupatel.phototextsearch.database.Migration5to6
 import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
+import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntity
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import android.provider.MediaStore
@@ -52,6 +54,64 @@ class DevanagariOcrIndexingWorker(
 
     private val textExtractor = DevanagariOcrTextExtractor(applicationContext)
     private val notificationManager = DevanagariOcrNotificationManager(applicationContext)
+    private val classificationDb by lazy { ClassificationDatabase.getInstance(applicationContext) }
+    private val preScanner by lazy { FastTextPreScanner(applicationContext) }
+
+    /**
+     * Reorders unprocessed images so has-text photos (per the shared fast pre-scan, also used
+     * by the Latin OCR worker) come first -- same priority-indexing fix as OcrIndexingWorker,
+     * reusing the same ClassificationDatabase so the pre-scan only ever runs once per photo
+     * regardless of which language pipeline gets to it first.
+     */
+    private suspend fun prioritizeByTextPresence(candidates: List<ImageInfo>): List<ImageInfo> {
+        if (candidates.isEmpty()) return candidates
+        val dao = classificationDb.photoClassificationDao()
+        val existing = dao.getByMediaIds(candidates.map { it.id }).associateBy { it.mediaId }
+
+        for (candidate in candidates) {
+            if (!existing.containsKey(candidate.id)) {
+                val hasText = try {
+                    preScanner.hasTextOrNull(candidate.uri)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Pre-scan threw for ${candidate.id}: ${e.message}")
+                    null
+                }
+                if (hasText != null) {
+                    dao.upsert(
+                        PhotoClassificationEntity(
+                            mediaId = candidate.id,
+                            hasText = hasText,
+                            preScannedAt = System.currentTimeMillis() / 1000
+                        )
+                    )
+                }
+            }
+        }
+
+        val refreshed = dao.getByMediaIds(candidates.map { it.id }).associateBy { it.mediaId }
+        return candidates.sortedByDescending { refreshed[it.id]?.hasText == true }
+    }
+
+    /**
+     * Category classification after successful extraction, same keyword-based approach and
+     * shared table as the Latin worker -- category isn't language-specific.
+     */
+    private suspend fun categorizeAfterExtraction(mediaId: Long, extractedText: String) {
+        try {
+            val category = PhotoCategoryClassifier.classify(extractedText)
+            val dao = classificationDb.photoClassificationDao()
+            val existing = dao.getByMediaId(mediaId)
+            dao.upsert(
+                (existing ?: PhotoClassificationEntity(
+                    mediaId = mediaId,
+                    hasText = extractedText.isNotBlank(),
+                    preScannedAt = System.currentTimeMillis() / 1000
+                )).copy(category = category, categorizedAt = System.currentTimeMillis() / 1000)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Category classification failed for $mediaId: ${e.message}")
+        }
+    }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         Log.d(TAG, "🚀 === DEVANAGARI OCR WORKER STARTED ===")
@@ -116,6 +176,7 @@ class DevanagariOcrIndexingWorker(
         } finally {
             Log.d(TAG, "🧹 Cleaning up text extractor...")
             textExtractor.cleanup()
+            preScanner.cleanup()
             Log.d(TAG, "🏁 === DEVANAGARI OCR WORKER FINISHED ===")
         }
     }
@@ -157,6 +218,7 @@ class DevanagariOcrIndexingWorker(
                     )
 
                     database.devanagariOcrTextDao().insertOcrText(ocrEntity)
+                    categorizeAfterExtraction(mediaId, ocrResult.extractedText)
 
                     Log.d(TAG, "Successfully processed Devanagari OCR for image $mediaId: ${ocrResult.extractedText.length} characters extracted")
 
@@ -253,10 +315,20 @@ class DevanagariOcrIndexingWorker(
                 ))
             }
 
-            // Process images in batches
-            val imagesToProcess = if (processAll) unprocessedImages else unprocessedImages.take(batchSize)
+            // Process images in batches -- prioritize has-text photos first (same fix as the
+            // Latin worker) so real, searchable documents get processed before photos with no
+            // text at all, instead of equal-priority date-order processing. Only prioritize a
+            // bounded prefix (not the entire remaining backlog, which could be thousands of
+            // images) so this doesn't itself become a slow upfront pre-scan pass -- the rest
+            // of the backlog (beyond this prioritized window) is appended unprioritized after.
+            val priorityWindowSize = minOf(maxOf(batchSize * 4, 400), unprocessedImages.size)
+            val priorityWindow = unprocessedImages.take(priorityWindowSize)
+            val remainder = unprocessedImages.drop(priorityWindowSize)
+            val prioritized = prioritizeByTextPresence(priorityWindow) + remainder
+            val imagesToProcess = if (processAll) prioritized else prioritized.take(batchSize)
             var processedCount = 0
             var failedCount = 0
+            var wasPausedMidRun = false
 
             Log.d(TAG, "Processing ${imagesToProcess.size} images for Devanagari OCR")
 
@@ -266,6 +338,7 @@ class DevanagariOcrIndexingWorker(
                     val currentProgress = database.devanagariOcrProgressDao().getProgress()
                     if (currentProgress?.isPaused == true) {
                         Log.d(TAG, "Devanagari OCR processing paused, stopping worker")
+                        wasPausedMidRun = true
                         break
                     }
 
@@ -287,6 +360,7 @@ class DevanagariOcrIndexingWorker(
                             )
 
                             database.devanagariOcrTextDao().insertOcrText(ocrEntity)
+                            categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText)
                             processedCount++
 
                             Log.d(TAG, "Successfully processed Devanagari OCR for image ${imageInfo.id}: ${ocrResult.extractedText.length} characters extracted")
@@ -312,13 +386,17 @@ class DevanagariOcrIndexingWorker(
                 }
             }
 
-            // Update final processing status
+            // Update final processing status. This must also cover the "paused mid-continuous-run"
+            // case (wasPausedMidRun) -- without it, isProcessing stays true forever after a pause
+            // during continuous processing (neither isComplete nor !processAll is true in that
+            // case), so the notification/UI kept showing "running" even though the worker had
+            // correctly stopped doing any actual work.
             val finalProgress = database.devanagariOcrProgressDao().getProgress()
             val isComplete = finalProgress?.isComplete == true
 
-            if (isComplete || !processAll) {
+            if (isComplete || !processAll || wasPausedMidRun) {
                 database.devanagariOcrProgressDao().updateProcessingStatus(false)
-                Log.d(TAG, "Devanagari OCR batch processing completed")
+                Log.d(TAG, "Devanagari OCR batch processing completed or paused")
             }
 
             Log.d(TAG, "Devanagari OCR batch processing finished: $processedCount processed, $failedCount failed")

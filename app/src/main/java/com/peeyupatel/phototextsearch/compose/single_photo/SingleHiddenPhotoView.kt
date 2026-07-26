@@ -36,7 +36,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -519,7 +518,7 @@ private fun BottomBar(
                         spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                     )
                     .background(
-                        color = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         shape = RoundedCornerShape(percent = 35)
                     ),
                 contentAlignment = Alignment.Center

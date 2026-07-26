@@ -380,7 +380,7 @@ fun DeviceMedia(
                                         Screens.SinglePhotoView(
                                             albumInfo = albumInfo,
                                             mediaItemId = mediaStoreItem.id,
-                                            loadsFromMainViewModel = isSearchResult || viewProperties == ViewProperties.Favourites,
+                                            loadsFromMainViewModel = isSearchResult || viewProperties == ViewProperties.Favourites || viewProperties == ViewProperties.SmartAlbum,
                                             searchQuery = if (isSearchResult) searchQuery else ""
                                         )
                                     )

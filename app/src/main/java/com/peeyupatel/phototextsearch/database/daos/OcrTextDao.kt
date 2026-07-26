@@ -66,6 +66,9 @@ interface OcrTextDao {
     
     @Query("SELECT media_id FROM ocr_text")
     suspend fun getAllProcessedMediaIds(): List<Long>
+
+    @Query("SELECT media_id AS mediaId, extracted_text AS extractedText FROM ocr_text")
+    suspend fun getAllMediaIdAndText(): List<MediaTextRow>
     
     @Query("SELECT AVG(confidence_score) FROM ocr_text")
     suspend fun getAverageConfidenceScore(): Float?

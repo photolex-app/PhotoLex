@@ -68,6 +68,12 @@ enum class ViewProperties(
         emptyIconResId = R.drawable.favourite,
         prefix = "",
         operation = ImageFunctions.LoadNormalImage
+    ),
+    SmartAlbum(
+        emptyText = "No photos in this category yet",
+        emptyIconResId = R.drawable.search,
+        prefix = "",
+        operation = ImageFunctions.LoadNormalImage
     )
 }
 

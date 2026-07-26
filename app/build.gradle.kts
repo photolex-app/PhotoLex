@@ -168,6 +168,12 @@ dependencies {
     // implementation("com.google.mlkit:text-recognition-japanese:16.0.1") // Japanese support
     // implementation("com.google.mlkit:text-recognition-korean:16.0.1") // Korean support
 
+    // ML Kit Image Labeling -- fast on-device pre-classification (smart albums feature)
+    implementation("com.google.mlkit:image-labeling:17.0.9")
+
+    // ML Kit Translation -- on-device query translation for cross-language search
+    implementation("com.google.mlkit:translate:17.0.3")
+
     // ALTERNATIVE 2: Tesseract4Android (8MB impact - recommended for size)
     // implementation("cz.adaptech.tesseract4android:tesseract4android:4.7.0")
 

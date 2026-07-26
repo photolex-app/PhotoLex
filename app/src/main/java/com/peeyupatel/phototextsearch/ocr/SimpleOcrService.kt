@@ -235,6 +235,34 @@ class SimpleOcrService(private val context: Context) {
                     }
                 }
 
+                // Cross-language search: also search using the query translated to the other
+                // language (English<->Hindi), so e.g. searching "car" also finds "गाड़ी". Only
+                // translates the short query itself (not the OCR corpus), and silently skips
+                // this step if the on-device translation model isn't downloaded yet -- never
+                // blocks or slows down the primary same-language search above.
+                try {
+                    val translatedQuery = QueryTranslator.translateForCrossLanguageSearch(query)
+                    if (translatedQuery != null) {
+                        Log.d(TAG, "Cross-language search: '$query' -> '$translatedQuery'")
+
+                        try {
+                            val latinTranslatedResults = database.ocrTextDao().searchOcrTextFallback(translatedQuery)
+                            results.addAll(latinTranslatedResults.map { it.mediaId })
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Latin translated search failed: ${e.message}")
+                        }
+
+                        try {
+                            val devanagariTranslatedResults = database.devanagariOcrTextDao().searchOcrTextFallback(translatedQuery)
+                            results.addAll(devanagariTranslatedResults.map { it.mediaId })
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Devanagari translated search failed: ${e.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Cross-language search step failed, continuing with same-language results: ${e.message}")
+                }
+
                 val mediaIds = results.toList()
                 Log.d(TAG, "Found ${mediaIds.size} total images matching '$query' across both Latin and Devanagari OCR")
                 mediaIds

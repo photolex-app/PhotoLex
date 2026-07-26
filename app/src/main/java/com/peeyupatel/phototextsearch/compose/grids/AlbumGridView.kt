@@ -285,6 +285,9 @@ fun AlbumsGridView(
                 .zIndex(1f)
         )
 
+        SmartAlbumsRow()
+        CuratedAlbumsRow()
+
         val coroutineScope = rememberCoroutineScope()
 
         LazyVerticalGrid(

@@ -1,0 +1,45 @@
+package com.peeyupatel.phototextsearch.database.entities
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+/**
+ * Fast pre-scan + category classification result for a single photo, used to prioritize
+ * OCR indexing order (text-containing photos first) and to power Smart Albums browsing.
+ * Deliberately kept in its own separate Room database (see ClassificationDatabase) rather
+ * than added to MediaDatabase, so it needs no schema migration of the existing, precious
+ * OCR/progress data -- this table simply doesn't exist until first accessed.
+ */
+@Entity(
+    tableName = "photo_classification",
+    indices = [
+        Index(value = ["has_text"]),
+        Index(value = ["category"])
+    ]
+)
+data class PhotoClassificationEntity(
+    @PrimaryKey
+    @ColumnInfo(name = "media_id")
+    val mediaId: Long,
+
+    @ColumnInfo(name = "has_text")
+    val hasText: Boolean,
+
+    @ColumnInfo(name = "pre_scanned_at")
+    val preScannedAt: Long,
+
+    @ColumnInfo(name = "category")
+    val category: String? = null,
+
+    @ColumnInfo(name = "categorized_at")
+    val categorizedAt: Long? = null
+) {
+    companion object {
+        const val CATEGORY_RECEIPT = "receipt"
+        const val CATEGORY_ID_CARD = "id_card"
+        const val CATEGORY_SCREENSHOT = "screenshot"
+        const val CATEGORY_DOCUMENT = "document"
+    }
+}
