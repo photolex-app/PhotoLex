@@ -16,9 +16,11 @@ PhotoLex does not collect, transmit, sell, or share any of your personal data, p
 
 None of this data ever leaves your device. There is no server operated by us that your photos, extracted text, or search queries are sent to.
 
-## About the on-device text recognition (OCR)
+## About the on-device text recognition (OCR) and translation
 
-PhotoLex uses Google's ML Kit to read text out of your photos, entirely on your device. The first time this feature runs, ML Kit may download a small, generic language-recognition model file via Google Play Services — this is a one-time technical download of the *recognition model itself*, not your photos or any personal data. After that, all text recognition and search happens fully offline, with no further network activity from this feature.
+PhotoLex uses Google's ML Kit to read text out of your photos and, for the optional cross-language search feature, to translate a short search query between English and Hindi — entirely on your device. The first time each of these features runs, ML Kit may download a small, generic model file (a text-recognition model or a translation model) via Google Play Services — this is a one-time technical download of the *model itself*, not your photos, your extracted text, or any personal data. After that, all recognition, translation, and search happens fully offline, with no further network activity from these features.
+
+**Why this app requests the INTERNET permission**: PhotoLex's own code never uses it to transmit anything — it's declared by the ML Kit libraries themselves, solely so they can perform the one-time model downloads described above. You can confirm this by inspecting the source code: PhotoLex has no server, no API calls, and no code path that sends your photos, extracted text, or search queries anywhere.
 
 ## Google Lens integration (optional, user-initiated)
 
