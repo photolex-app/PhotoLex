@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2023 kaii-lb (original author)
  * Copyright (C) 2025 AKS-Labs (modifications)
+ * Copyright (C) 2026 PeeyuPatel Lab (modifications)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

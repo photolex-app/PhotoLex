@@ -157,12 +157,12 @@ fun AboutPage(popBackStack: () -> Unit) {
         ) {
             PreferencesRow(
                 title = "Developer",
-                summary = "AKS-Labs",
+                summary = "PeeyuPatel Lab",
                 iconResID = R.drawable.code,
                 position = RowPosition.Top
             ) {
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setData("https://github.com/AKS-Labs/tulsi".toUri())
+                    setData("https://github.com/photolex-app/PhotoLex".toUri())
                 }
 
                 context.startActivity(intent)
@@ -222,7 +222,7 @@ fun AboutPage(popBackStack: () -> Unit) {
                 position = RowPosition.Middle
             ) {
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setData("https://github.com/AKS-Labs/Tulsi".toUri())
+                    setData("https://github.com/photolex-app/PhotoLex".toUri())
                 }
                 context.startActivity(intent)
             }
