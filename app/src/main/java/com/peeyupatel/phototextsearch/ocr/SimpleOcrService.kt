@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
+import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -188,12 +189,7 @@ class SimpleOcrService(private val context: Context) {
                     // tokenized index first (can use the index, unlike a leading-wildcard LIKE
                     // scan), falling back to the old LIKE-based search if MATCH's query syntax
                     // rejects this particular input (e.g. stray special characters).
-                    val latinExactResults = try {
-                        database.ocrTextDao().searchOcrTextFts(ftsPhraseQuery(query))
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Latin FTS exact search failed, falling back to LIKE: ${e.message}")
-                        database.ocrTextDao().searchOcrTextFallback(query)
-                    }
+                    val latinExactResults = searchLatinFtsOrFallback(ftsPhraseQuery(query), query)
                     results.addAll(latinExactResults.map { it.mediaId })
                     Log.d(TAG, "Latin exact search found ${latinExactResults.size} results")
                 } catch (e: Exception) {
@@ -217,11 +213,7 @@ class SimpleOcrService(private val context: Context) {
                         if (word.length >= 2) {
                             // Search Latin OCR for individual words -- FTS prefix match first
                             try {
-                                val latinWordResults = try {
-                                    database.ocrTextDao().searchOcrTextFts(ftsPrefixQuery(word))
-                                } catch (e: Exception) {
-                                    database.ocrTextDao().searchOcrTextFallback(word)
-                                }
+                                val latinWordResults = searchLatinFtsOrFallback(ftsPrefixQuery(word), word)
                                 results.addAll(latinWordResults.map { it.mediaId })
                             } catch (e: Exception) {
                                 Log.w(TAG, "Latin word search failed for '$word': ${e.message}")
@@ -258,11 +250,7 @@ class SimpleOcrService(private val context: Context) {
                         Log.d(TAG, "Cross-language search: '$query' -> '$translatedQuery'")
 
                         try {
-                            val latinTranslatedResults = try {
-                                database.ocrTextDao().searchOcrTextFts(ftsPhraseQuery(translatedQuery))
-                            } catch (e: Exception) {
-                                database.ocrTextDao().searchOcrTextFallback(translatedQuery)
-                            }
+                            val latinTranslatedResults = searchLatinFtsOrFallback(ftsPhraseQuery(translatedQuery), translatedQuery)
                             results.addAll(latinTranslatedResults.map { it.mediaId })
                         } catch (e: Exception) {
                             Log.w(TAG, "Latin translated search failed: ${e.message}")
@@ -299,6 +287,24 @@ class SimpleOcrService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Search failed for query: $query", e)
             emptyList()
+        }
+    }
+
+    /**
+     * Try an FTS4 MATCH query against the Latin OCR table first (can use the index, unlike a
+     * leading-wildcard LIKE scan), falling back to the old LIKE-based search if MATCH's query
+     * syntax rejects [ftsQuery] (e.g. stray special characters) -- shared by every Latin search
+     * strategy (exact phrase, word prefix, translated phrase) below.
+     */
+    private suspend fun searchLatinFtsOrFallback(
+        ftsQuery: String,
+        rawQuery: String
+    ): List<OcrTextEntity> {
+        return try {
+            database.ocrTextDao().searchOcrTextFts(ftsQuery)
+        } catch (e: Exception) {
+            Log.w(TAG, "Latin FTS search failed for '$ftsQuery', falling back to LIKE: ${e.message}")
+            database.ocrTextDao().searchOcrTextFallback(rawQuery)
         }
     }
 

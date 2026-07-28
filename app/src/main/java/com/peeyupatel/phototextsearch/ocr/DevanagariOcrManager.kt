@@ -442,13 +442,6 @@ class DevanagariOcrManager(
     }
 
     /**
-     * Search images by OCR text
-     */
-    suspend fun searchByOcrText(query: String): List<DevanagariOcrTextEntity> {
-        return database.devanagariOcrTextDao().searchOcrTextFallback(query)
-    }
-
-    /**
      * Cancel all OCR work
      */
     fun cancelAllOcr() {

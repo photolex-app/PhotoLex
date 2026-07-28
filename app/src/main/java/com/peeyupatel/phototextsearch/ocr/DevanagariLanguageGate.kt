@@ -1,8 +1,6 @@
 package com.peeyupatel.phototextsearch.ocr
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.google.mlkit.nl.languageid.LanguageIdentification
@@ -78,41 +76,8 @@ class DevanagariLanguageGate(private val context: Context) {
                 .addOnFailureListener { continuation.resumeWithException(it) }
         }
 
-    private fun loadSmallBitmap(uri: Uri): Bitmap? {
-        return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeStream(inputStream, null, boundsOptions)
-
-                val sampleSize = calculateSampleSize(boundsOptions, PRESCAN_MAX_DIMENSION, PRESCAN_MAX_DIMENSION)
-
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val loadOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                        inPreferredConfig = Bitmap.Config.RGB_565
-                    }
-                    BitmapFactory.decodeStream(stream, null, loadOptions)
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load small bitmap for language pre-check: $uri", e)
-            null
-        }
-    }
-
-    private fun calculateSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-        val height = options.outHeight
-        val width = options.outWidth
-        var inSampleSize = 1
-        if (height > reqHeight || width > reqWidth) {
-            val halfHeight = height / 2
-            val halfWidth = width / 2
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
-    }
+    private fun loadSmallBitmap(uri: Uri) =
+        BitmapDownsampler.loadSmallBitmap(context, uri, PRESCAN_MAX_DIMENSION)
 
     fun cleanup() {
         recognizer.close()

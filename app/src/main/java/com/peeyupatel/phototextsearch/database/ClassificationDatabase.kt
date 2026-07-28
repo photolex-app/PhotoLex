@@ -27,7 +27,7 @@ import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntit
         CuratedAlbumPhotoEntity::class,
         BarcodeEntity::class
     ],
-    version = 5
+    version = 6
 )
 abstract class ClassificationDatabase : RoomDatabase() {
     abstract fun photoClassificationDao(): PhotoClassificationDao
@@ -93,6 +93,14 @@ abstract class ClassificationDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Speeds up getRecentWithHash()'s "WHERE d_hash IS NOT NULL ORDER BY
+                // pre_scanned_at DESC" (run once per OCR batch) -- additive only, no data change.
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_photo_classification_d_hash_pre_scanned_at` ON `photo_classification` (`d_hash`, `pre_scanned_at`)")
+            }
+        }
+
         fun getInstance(context: Context): ClassificationDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -100,7 +108,7 @@ abstract class ClassificationDatabase : RoomDatabase() {
                     ClassificationDatabase::class.java,
                     "photo-classification-database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { instance = it }
             }
         }

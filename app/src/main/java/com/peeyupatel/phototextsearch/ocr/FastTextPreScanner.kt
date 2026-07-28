@@ -2,12 +2,13 @@ package com.peeyupatel.phototextsearch.ocr
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -84,11 +85,20 @@ class FastTextPreScanner(private val context: Context) {
                 Log.w(TAG, "dHash computation failed for $uri: ${e.message}")
                 null
             }
-            val isLikelyDocument = ImageLabelingHelper.isLikelyDocument(bitmap)
-            val barcode = BarcodeScanningHelper.scan(bitmap)
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
-            val result = withTimeoutOrNull(PRESCAN_TIMEOUT_MS) { recognizeText(inputImage) }
-            PreScanResult(result?.textBlocks?.isNotEmpty(), dHash, isLikelyDocument, barcode)
+            // Independent signals off the same decoded bitmap -- run concurrently rather than
+            // sequentially so wall time is bounded by the slowest, not the sum of all three.
+            coroutineScope {
+                val isLikelyDocumentDeferred = async { ImageLabelingHelper.isLikelyDocument(bitmap) }
+                val barcodeDeferred = async { BarcodeScanningHelper.scan(bitmap) }
+                val textDeferred = async {
+                    val inputImage = InputImage.fromBitmap(bitmap, 0)
+                    withTimeoutOrNull(PRESCAN_TIMEOUT_MS) { recognizeText(inputImage) }
+                }
+                val isLikelyDocument = isLikelyDocumentDeferred.await()
+                val barcode = barcodeDeferred.await()
+                val result = textDeferred.await()
+                PreScanResult(result?.textBlocks?.isNotEmpty(), dHash, isLikelyDocument, barcode)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Pre-scan failed for $uri: ${e.message}")
             PreScanResult(null, null)
@@ -137,41 +147,8 @@ class FastTextPreScanner(private val context: Context) {
             .addOnFailureListener { continuation.resumeWithException(it) }
     }
 
-    private fun loadSmallBitmap(uri: Uri): Bitmap? {
-        return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeStream(inputStream, null, boundsOptions)
-
-                val sampleSize = calculateSampleSize(boundsOptions, PRESCAN_MAX_DIMENSION, PRESCAN_MAX_DIMENSION)
-
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val loadOptions = BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                        inPreferredConfig = Bitmap.Config.RGB_565
-                    }
-                    BitmapFactory.decodeStream(stream, null, loadOptions)
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load small bitmap for pre-scan: $uri", e)
-            null
-        }
-    }
-
-    private fun calculateSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-        val height = options.outHeight
-        val width = options.outWidth
-        var inSampleSize = 1
-        if (height > reqHeight || width > reqWidth) {
-            val halfHeight = height / 2
-            val halfWidth = width / 2
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
-    }
+    private fun loadSmallBitmap(uri: Uri): Bitmap? =
+        BitmapDownsampler.loadSmallBitmap(context, uri, PRESCAN_MAX_DIMENSION)
 
     fun cleanup() {
         recognizer.close()

@@ -457,14 +457,6 @@ class OcrManager(
     }
     
     /**
-     * Search images by OCR text
-     */
-    suspend fun searchByOcrText(query: String, useFts: Boolean = false): List<OcrTextEntity> {
-        // FTS temporarily disabled, using LIKE search
-        return database.ocrTextDao().searchOcrText(query)
-    }
-    
-    /**
      * Get OCR statistics
      */
     suspend fun getOcrStats(): OcrStats {

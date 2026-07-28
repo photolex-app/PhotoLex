@@ -26,9 +26,6 @@ interface OcrTextDao {
     @Query("SELECT * FROM ocr_text WHERE media_id IN (:mediaIds)")
     suspend fun getOcrTextsByMediaIds(mediaIds: List<Long>): List<OcrTextEntity>
     
-    @Query("SELECT * FROM ocr_text WHERE extracted_text LIKE :searchQuery")
-    suspend fun searchOcrText(searchQuery: String): List<OcrTextEntity>
-
     // Primary search path: FTS4 MATCH against the tokenized index instead of a leading-wildcard
     // LIKE scan, which can't use the extracted_text index at all.
     @Query("""

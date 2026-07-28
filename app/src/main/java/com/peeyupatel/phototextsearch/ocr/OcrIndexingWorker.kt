@@ -457,6 +457,10 @@ class OcrIndexingWorker(
 
                     semaphore.acquire()
                     launch {
+                        // Tracks whether the permit was already released early (right after the
+                        // OCR result is persisted) so the finally block below doesn't release it
+                        // a second time -- see the two categorizeAfterExtraction call sites.
+                        var semaphoreReleased = false
                         try {
                             Log.d(TAG, "Processing image ${index + 1}/${unprocessedImages.size}: ${imageInfo.id}")
 
@@ -483,6 +487,11 @@ class OcrIndexingWorker(
                                         processingTimeMs = 0L
                                     )
                                     database.ocrTextDao().insertOcrText(copiedEntity)
+                                    // Release the concurrency slot now -- the only work left
+                                    // (entity extraction, similarity-cache update) doesn't need
+                                    // to hold up the next image's OCR from starting.
+                                    semaphore.release()
+                                    semaphoreReleased = true
                                     categorizeAfterExtraction(imageInfo.id, sourceEntity.extractedText, imageInfo.width, imageInfo.height)
                                     processedCount.incrementAndGet()
                                     Log.d(TAG, "Skipped full OCR for image ${imageInfo.id} (near-duplicate of $duplicateSourceId, copied result)")
@@ -528,6 +537,9 @@ class OcrIndexingWorker(
                                     )
 
                                     database.ocrTextDao().insertOcrText(ocrEntity)
+                                    // Same early-release as the duplicate-copy path above.
+                                    semaphore.release()
+                                    semaphoreReleased = true
                                     categorizeAfterExtraction(imageInfo.id, ocrResult.extractedText, imageInfo.width, imageInfo.height)
                                     processedCount.incrementAndGet()
 
@@ -559,7 +571,7 @@ class OcrIndexingWorker(
                             Log.e(TAG, "Failed to process image ${imageInfo.id}", e)
                             errorCount.incrementAndGet()
                         } finally {
-                            semaphore.release()
+                            if (!semaphoreReleased) semaphore.release()
                         }
                     }
                 }

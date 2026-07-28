@@ -16,7 +16,11 @@ import androidx.room.PrimaryKey
     tableName = "photo_classification",
     indices = [
         Index(value = ["has_text"]),
-        Index(value = ["category"])
+        Index(value = ["category"]),
+        // Supports getRecentWithHash()'s "WHERE d_hash IS NOT NULL ORDER BY pre_scanned_at DESC"
+        // -- without this, that query (run once per OCR batch for burst-duplicate detection)
+        // falls back to a full-table sort.
+        Index(value = ["d_hash", "pre_scanned_at"])
     ]
 )
 data class PhotoClassificationEntity(

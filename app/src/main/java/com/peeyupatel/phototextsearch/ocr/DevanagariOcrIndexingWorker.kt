@@ -339,6 +339,25 @@ class DevanagariOcrIndexingWorker(
             val concurrency = 3
             val semaphore = Semaphore(concurrency)
 
+            // Records a skipped (not actually OCR'd) image as an empty Devanagari OCR entity and
+            // updates progress -- shared by the pre-scan no-text skip and the language-gate
+            // non-Hindi skip below, which differ only in why the image was skipped.
+            suspend fun recordSkippedDevanagari(imageInfo: ImageInfo, reason: String) {
+                val emptyOcrEntity = DevanagariOcrTextEntity(
+                    mediaId = imageInfo.id,
+                    extractedText = "",
+                    extractionTimestamp = System.currentTimeMillis() / 1000,
+                    confidenceScore = 0.0f,
+                    textBlocksCount = 0,
+                    processingTimeMs = 0L
+                )
+                database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
+                processedCount.incrementAndGet()
+                Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} ($reason)")
+                val skippedTotalProcessed = database.devanagariOcrTextDao().getOcrTextCount()
+                database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
+            }
+
             coroutineScope {
                 for ((index, imageInfo) in imagesToProcess.withIndex()) {
                     // Check if processing should be paused, once per image before dispatching it
@@ -357,19 +376,7 @@ class DevanagariOcrIndexingWorker(
                             // Skip the expensive full-resolution OCR call entirely when the fast
                             // pre-scan already confidently found no text.
                             if (hasTextByMediaId[imageInfo.id] == false) {
-                                val emptyOcrEntity = DevanagariOcrTextEntity(
-                                    mediaId = imageInfo.id,
-                                    extractedText = "",
-                                    extractionTimestamp = System.currentTimeMillis() / 1000,
-                                    confidenceScore = 0.0f,
-                                    textBlocksCount = 0,
-                                    processingTimeMs = 0L
-                                )
-                                database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
-                                processedCount.incrementAndGet()
-                                Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} (pre-scan confirmed no text)")
-                                val skippedTotalProcessed = database.devanagariOcrTextDao().getOcrTextCount()
-                                database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
+                                recordSkippedDevanagari(imageInfo, "pre-scan confirmed no text")
                                 return@launch
                             }
 
@@ -378,19 +385,7 @@ class DevanagariOcrIndexingWorker(
                             // confidently shows this photo's text isn't Hindi -- same skip
                             // pattern as the no-text case above, just narrower.
                             if (languageGate.isConfidentlyNotDevanagari(imageInfo.uri)) {
-                                val emptyOcrEntity = DevanagariOcrTextEntity(
-                                    mediaId = imageInfo.id,
-                                    extractedText = "",
-                                    extractionTimestamp = System.currentTimeMillis() / 1000,
-                                    confidenceScore = 0.0f,
-                                    textBlocksCount = 0,
-                                    processingTimeMs = 0L
-                                )
-                                database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
-                                processedCount.incrementAndGet()
-                                Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} (language-id confirmed non-Hindi content)")
-                                val skippedTotalProcessed = database.devanagariOcrTextDao().getOcrTextCount()
-                                database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
+                                recordSkippedDevanagari(imageInfo, "language-id confirmed non-Hindi content")
                                 return@launch
                             }
 
