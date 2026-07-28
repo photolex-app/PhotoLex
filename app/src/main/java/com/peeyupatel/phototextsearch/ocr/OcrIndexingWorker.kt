@@ -50,15 +50,30 @@ class OcrIndexingWorker(
         // just finished -- a low weight keeps the shown ETA from jumping between "40 minutes"
         // and "5 hours" every update while still adapting as the true rate shifts over time.
         private const val PROCESSING_TIME_EMA_ALPHA = 0.15
+
+        // Matches currentOcrConcurrency()'s upper cap. Experiment: give each concurrent OCR
+        // slot its own TextRecognizer client instead of sharing one -- ML Kit's on-device
+        // recognizer is suspected to serialize calls internally against a single shared client
+        // (concurrency alone didn't help when first tried, see memory), so this tests whether
+        // the bottleneck is at the shared-client level specifically. Costs more RAM (each
+        // instance holds its own loaded model); worth it only if it actually unlocks real
+        // parallelism -- unused pool slots during throttled/low-concurrency periods just sit
+        // idle, no correctness cost.
+        private const val RECOGNIZER_POOL_SIZE = 6
     }
-    
+
     private val database by lazy {
         MediaDatabase.getInstance(applicationContext)
     }
-    
-    private val ocrExtractor by lazy {
-        OcrTextExtractor(applicationContext)
+
+    private val ocrExtractorPool by lazy {
+        List(RECOGNIZER_POOL_SIZE) { OcrTextExtractor(applicationContext) }
     }
+
+    // Used by the low-concurrency call sites (single-image processing, fallback loop) that
+    // don't need a dedicated pool slot each.
+    private val ocrExtractor: OcrTextExtractor
+        get() = ocrExtractorPool[0]
 
     private val classificationDb by lazy {
         ClassificationDatabase.getInstance(applicationContext)
@@ -212,7 +227,7 @@ class OcrIndexingWorker(
             Log.e(TAG, "OCR indexing worker failed", e)
             Result.failure(workDataOf(KEY_ERRORS to e.message))
         } finally {
-            ocrExtractor.cleanup()
+            ocrExtractorPool.forEach { it.cleanup() }
             preScanner.cleanup()
         }
     }
@@ -528,8 +543,10 @@ class OcrIndexingWorker(
                                 return@launch
                             }
 
-                            // Extract text from image
-                            val ocrResult = ocrExtractor.extractTextFromImage(imageInfo.uri)
+                            // Extract text from image -- round-robin across the recognizer pool
+                            // so concurrent slots use separate client instances instead of one
+                            // shared one (see RECOGNIZER_POOL_SIZE).
+                            val ocrResult = ocrExtractorPool[index % ocrExtractorPool.size].extractTextFromImage(imageInfo.uri)
 
                             when (ocrResult) {
                                 is OcrResult.Success -> {
