@@ -39,6 +39,11 @@ class DevanagariOcrManager(
         private const val TAG = "DevanagariOcrManager"
         private const val WORK_NAME_BATCH_OCR = "devanagari_batch_ocr_indexing"
         private const val WORK_NAME_SINGLE_OCR = "devanagari_single_ocr_"
+
+        // Same EMA smoothing as the Latin pipeline's ETA (see
+        // OcrIndexingWorker.PROCESSING_TIME_EMA_ALPHA) -- a single instantaneous rate sample
+        // swings too wildly to show the user a stable "time remaining" estimate.
+        private const val PROCESSING_TIME_EMA_ALPHA = 0.15
     }
 
     private val workManager = WorkManager.getInstance(context)
@@ -260,7 +265,7 @@ class DevanagariOcrManager(
         if (progress != null && (progress.isProcessing || progress.isPaused)) {
             // Force refresh the progress data to ensure accurate display
             val totalImages = getTotalImageCount()
-            val totalProcessedImages = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+            val totalProcessedImages = database.devanagariOcrTextDao().getOcrTextCount()
 
             Log.d(TAG, "Refreshing Devanagari progress data: $totalProcessedImages/$totalImages (stored: ${progress.processedImages}/${progress.totalImages})")
 
@@ -308,8 +313,8 @@ class DevanagariOcrManager(
                         val totalImages = getTotalImageCount()
                         Log.d(TAG, "Total images in MediaStore: $totalImages")
 
-                        Log.d(TAG, "Getting processed media IDs...")
-                        val totalProcessedImages = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+                        Log.d(TAG, "Getting processed count...")
+                        val totalProcessedImages = database.devanagariOcrTextDao().getOcrTextCount()
                         Log.d(TAG, "Total processed images in Devanagari OCR: $totalProcessedImages")
 
                         Log.d(TAG, "📈 Devanagari progress check: $totalProcessedImages/$totalImages (stored: ${progress.processedImages}/${progress.totalImages})")
@@ -335,10 +340,29 @@ class DevanagariOcrManager(
 
                         // Always update progress to ensure Flow emission and real-time updates
                         val currentTime = System.currentTimeMillis()
+
+                        // Smooth the processing-rate estimate with an EMA instead of a single
+                        // noisy instantaneous sample -- this was never computed here before,
+                        // which is why Devanagari's progress UI never showed a time remaining.
+                        val imagesProcessedSinceLastUpdate = totalProcessedImages - progress.processedImages
+                        val averageProcessingTimeMs = if (imagesProcessedSinceLastUpdate > 0) {
+                            val timeElapsed = currentTime - (progress.lastUpdated * 1000)
+                            val instantRateMs = timeElapsed / imagesProcessedSinceLastUpdate
+                            val previousAverage = progress.averageProcessingTimeMs
+                            if (previousAverage > 0) {
+                                (PROCESSING_TIME_EMA_ALPHA * instantRateMs + (1 - PROCESSING_TIME_EMA_ALPHA) * previousAverage).toLong()
+                            } else {
+                                instantRateMs
+                            }
+                        } else {
+                            progress.averageProcessingTimeMs
+                        }
+
                         val updatedProgress = progress.copy(
                             processedImages = totalProcessedImages,
                             totalImages = totalImages,
-                            lastUpdated = currentTime / 1000
+                            lastUpdated = currentTime / 1000,
+                            averageProcessingTimeMs = averageProcessingTimeMs
                             // Preserve isPaused and isProcessing states
                         )
 
