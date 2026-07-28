@@ -90,7 +90,18 @@ class OcrIndexingWorker(
                             mediaId = candidate.id,
                             hasText = scan.hasText,
                             preScannedAt = System.currentTimeMillis() / 1000,
-                            dHash = scan.dHash
+                            dHash = scan.dHash,
+                            isLikelyDocumentVisually = scan.isLikelyDocument
+                        )
+                    )
+                }
+                scan.barcode?.let { barcode ->
+                    classificationDb.barcodeDao().upsert(
+                        com.peeyupatel.phototextsearch.database.entities.BarcodeEntity(
+                            mediaId = candidate.id,
+                            barcodeText = barcode.text,
+                            format = barcode.format,
+                            scannedAt = System.currentTimeMillis() / 1000
                         )
                     )
                 }
@@ -143,9 +154,12 @@ class OcrIndexingWorker(
      */
     private suspend fun categorizeAfterExtraction(mediaId: Long, extractedText: String, imageWidth: Int = 0, imageHeight: Int = 0) {
         try {
-            val category = PhotoCategoryClassifier.classify(extractedText, imageWidth, imageHeight)
+            val entities = EntityExtractionHelper.extract(extractedText)
             val classificationDao = classificationDb.photoClassificationDao()
             val existing = classificationDao.getByMediaId(mediaId)
+            val category = PhotoCategoryClassifier.classify(
+                extractedText, imageWidth, imageHeight, entities, existing?.isLikelyDocumentVisually
+            )
             classificationDao.upsert(
                 (existing ?: PhotoClassificationEntity(
                     mediaId = mediaId,

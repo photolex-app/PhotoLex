@@ -220,6 +220,17 @@ dependencies {
     // ML Kit Translation -- on-device query translation for cross-language search
     implementation("com.google.mlkit:translate:17.0.3")
 
+    // ML Kit Entity Extraction -- pulls structured entities (dates, money, phone numbers,
+    // addresses, URLs) out of already-extracted OCR text to sharpen Smart Albums classification
+    implementation("com.google.mlkit:entity-extraction:16.0.0-beta6")
+
+    // ML Kit Language Identification -- detects Devanagari/Hindi content so the opt-in
+    // Devanagari indexing pass can skip confidently non-Hindi photos
+    implementation("com.google.mlkit:language-id:17.0.6")
+
+    // ML Kit Barcode Scanning -- cheap, fast pass alongside OCR pre-scan for receipts/tickets
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
     // ALTERNATIVE 2: Tesseract4Android (8MB impact - recommended for size)
     // implementation("cz.adaptech.tesseract4android:tesseract4android:4.7.0")
 

@@ -41,7 +41,13 @@ data class PhotoClassificationEntity(
      * result copied from an already-processed neighbor instead. Null for rows scanned
      * before this field existed. */
     @ColumnInfo(name = "d_hash")
-    val dHash: Long? = null
+    val dHash: Long? = null,
+
+    /** ML Kit Image Labeling's "does this look like a document" signal from the same
+     * pre-scan bitmap, used as a secondary classification signal alongside OCR text.
+     * Null for rows scanned before this field existed, or if labeling failed/unavailable. */
+    @ColumnInfo(name = "is_likely_document_visually")
+    val isLikelyDocumentVisually: Boolean? = null
 ) {
     companion object {
         const val CATEGORY_RECEIPT = "receipt"

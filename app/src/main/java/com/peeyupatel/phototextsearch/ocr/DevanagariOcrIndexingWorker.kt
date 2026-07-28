@@ -53,6 +53,7 @@ class DevanagariOcrIndexingWorker(
     private val notificationManager = DevanagariOcrNotificationManager(applicationContext)
     private val classificationDb by lazy { ClassificationDatabase.getInstance(applicationContext) }
     private val preScanner by lazy { FastTextPreScanner(applicationContext) }
+    private val languageGate by lazy { DevanagariLanguageGate(applicationContext) }
 
     /**
      * Reorders unprocessed images so has-text photos (per the shared fast pre-scan, also used
@@ -164,6 +165,7 @@ class DevanagariOcrIndexingWorker(
             Log.d(TAG, "🧹 Cleaning up text extractor...")
             textExtractor.cleanup()
             preScanner.cleanup()
+            languageGate.cleanup()
             Log.d(TAG, "🏁 === DEVANAGARI OCR WORKER FINISHED ===")
         }
     }
@@ -366,7 +368,28 @@ class DevanagariOcrIndexingWorker(
                                 database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
                                 processedCount.incrementAndGet()
                                 Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} (pre-scan confirmed no text)")
-                                val skippedTotalProcessed = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+                                val skippedTotalProcessed = database.devanagariOcrTextDao().getOcrTextCount()
+                                database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
+                                return@launch
+                            }
+
+                            // Skip the expensive full-resolution Devanagari OCR call when a
+                            // cheap pre-check (small Devanagari-recognizer pass + language-id)
+                            // confidently shows this photo's text isn't Hindi -- same skip
+                            // pattern as the no-text case above, just narrower.
+                            if (languageGate.isConfidentlyNotDevanagari(imageInfo.uri)) {
+                                val emptyOcrEntity = DevanagariOcrTextEntity(
+                                    mediaId = imageInfo.id,
+                                    extractedText = "",
+                                    extractionTimestamp = System.currentTimeMillis() / 1000,
+                                    confidenceScore = 0.0f,
+                                    textBlocksCount = 0,
+                                    processingTimeMs = 0L
+                                )
+                                database.devanagariOcrTextDao().insertOcrText(emptyOcrEntity)
+                                processedCount.incrementAndGet()
+                                Log.d(TAG, "Skipped full Devanagari OCR for image ${imageInfo.id} (language-id confirmed non-Hindi content)")
+                                val skippedTotalProcessed = database.devanagariOcrTextDao().getOcrTextCount()
                                 database.devanagariOcrProgressDao().updateProcessedCount(skippedTotalProcessed)
                                 return@launch
                             }
@@ -400,7 +423,7 @@ class DevanagariOcrIndexingWorker(
                             }
 
                             // Update progress
-                            val totalProcessedImages = database.devanagariOcrTextDao().getAllProcessedMediaIds().size
+                            val totalProcessedImages = database.devanagariOcrTextDao().getOcrTextCount()
                             database.devanagariOcrProgressDao().updateProcessedCount(totalProcessedImages)
 
                         } catch (e: Exception) {

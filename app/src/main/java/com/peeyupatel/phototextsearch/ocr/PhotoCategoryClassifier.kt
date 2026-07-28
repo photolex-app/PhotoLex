@@ -23,18 +23,37 @@ object PhotoCategoryClassifier {
      * @param imageWidth/imageHeight optional pixel dimensions, used as a secondary signal for
      * screenshots (which commonly match a device's exact screen resolution) -- pass 0/0 if
      * unknown, the classifier still works from text content alone.
+     * @param entities optional ML Kit entity-extraction result over the same text -- a detected
+     * money amount or phone number counts as an extra receipt/ID-card signal alongside the
+     * keyword matches, catching receipts whose OCR text shows an amount (e.g. "$45.00") without
+     * ever containing an explicit word like "total"/"invoice"/"gst". Purely additive: passing
+     * null (or an all-false result) keeps behavior identical to the pure keyword classifier.
+     * @param visuallyLikelyDocument optional ML Kit Image Labeling signal from the same photo's
+     * pre-scan bitmap ("Paper"/"Document"/"Text"/"Whiteboard" labels) -- lowers the plain-text-
+     * length bar for the DOCUMENT category when the photo also visually looks like a document,
+     * catching shorter documents that the text-length-alone heuristic would otherwise miss.
      */
-    fun classify(extractedText: String, imageWidth: Int = 0, imageHeight: Int = 0): String? {
+    fun classify(
+        extractedText: String,
+        imageWidth: Int = 0,
+        imageHeight: Int = 0,
+        entities: EntityExtractionHelper.ExtractedEntities? = null,
+        visuallyLikelyDocument: Boolean? = null
+    ): String? {
         if (extractedText.isBlank()) return null
 
-        val idCardMatches = idCardKeywords.count { it.containsMatchIn(extractedText) }
-        val receiptMatches = receiptKeywords.count { it.containsMatchIn(extractedText) }
+        val idCardMatches = idCardKeywords.count { it.containsMatchIn(extractedText) } +
+            (if (entities?.hasAddress == true) 1 else 0)
+        val receiptMatches = receiptKeywords.count { it.containsMatchIn(extractedText) } +
+            (if (entities?.hasMoney == true) 1 else 0)
+        val trimmedLength = extractedText.trim().length
+        val documentLengthThreshold = if (visuallyLikelyDocument == true) 40 else 80
 
         return when {
             idCardMatches >= 2 -> PhotoClassificationEntity.CATEGORY_ID_CARD
             receiptMatches >= 2 -> PhotoClassificationEntity.CATEGORY_RECEIPT
             isLikelyScreenshotDimensions(imageWidth, imageHeight) -> PhotoClassificationEntity.CATEGORY_SCREENSHOT
-            extractedText.trim().length >= 80 -> PhotoClassificationEntity.CATEGORY_DOCUMENT
+            trimmedLength >= documentLengthThreshold -> PhotoClassificationEntity.CATEGORY_DOCUMENT
             else -> null
         }
     }

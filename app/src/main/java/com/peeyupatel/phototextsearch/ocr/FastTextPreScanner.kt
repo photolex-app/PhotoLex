@@ -40,7 +40,12 @@ class FastTextPreScanner(private val context: Context) {
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    data class PreScanResult(val hasText: Boolean?, val dHash: Long?)
+    data class PreScanResult(
+        val hasText: Boolean?,
+        val dHash: Long?,
+        val isLikelyDocument: Boolean? = null,
+        val barcode: BarcodeScanningHelper.DetectedBarcode? = null
+    )
 
     /**
      * Returns true if the image appears to contain any text at all, false if not (or if the
@@ -64,9 +69,10 @@ class FastTextPreScanner(private val context: Context) {
     }
 
     /**
-     * Same text-presence scan as hasTextOrNull(), plus a dHash fingerprint computed from the
-     * same already-decoded downsampled bitmap (near-zero extra decode cost) so callers can
-     * detect near-identical burst/duplicate photos without a second full-resolution decode.
+     * Same text-presence scan as hasTextOrNull(), plus a dHash fingerprint, an image-labeling
+     * "does this look like a document" signal, and a barcode/QR scan, all computed from the
+     * same already-decoded downsampled bitmap (near-zero extra decode cost) so callers get all
+     * four signals from a single small decode instead of separate passes.
      */
     suspend fun scanWithHash(uri: Uri): PreScanResult {
         val bitmap = loadSmallBitmap(uri) ?: return PreScanResult(null, null)
@@ -78,9 +84,11 @@ class FastTextPreScanner(private val context: Context) {
                 Log.w(TAG, "dHash computation failed for $uri: ${e.message}")
                 null
             }
+            val isLikelyDocument = ImageLabelingHelper.isLikelyDocument(bitmap)
+            val barcode = BarcodeScanningHelper.scan(bitmap)
             val inputImage = InputImage.fromBitmap(bitmap, 0)
             val result = withTimeoutOrNull(PRESCAN_TIMEOUT_MS) { recognizeText(inputImage) }
-            PreScanResult(result?.textBlocks?.isNotEmpty(), dHash)
+            PreScanResult(result?.textBlocks?.isNotEmpty(), dHash, isLikelyDocument, barcode)
         } catch (e: Exception) {
             Log.w(TAG, "Pre-scan failed for $uri: ${e.message}")
             PreScanResult(null, null)

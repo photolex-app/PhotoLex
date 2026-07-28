@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +35,11 @@ class SimpleOcrService(private val context: Context) {
     private val database by lazy {
         MediaDatabase.getInstance(context)
     }
-    
+
+    private val classificationDb by lazy {
+        ClassificationDatabase.getInstance(context)
+    }
+
     private var isProcessing = false
     
     /**
@@ -231,6 +236,15 @@ class SimpleOcrService(private val context: Context) {
                             }
                         }
                     }
+                }
+
+                // Search detected barcode/QR payloads (receipts, tickets, boarding passes)
+                try {
+                    val barcodeResults = classificationDb.barcodeDao().searchMediaIds(query)
+                    results.addAll(barcodeResults)
+                    Log.d(TAG, "Barcode search found ${barcodeResults.size} results")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Barcode search failed: ${e.message}")
                 }
 
                 // Cross-language search: also search using the query translated to the other
