@@ -765,6 +765,7 @@ class SettingsOcrImpl(
 ) {
     private val latinOcrEnabledKey = booleanPreferencesKey("latin_ocr_enabled")
     private val devanagariOcrEnabledKey = booleanPreferencesKey("devanagari_ocr_enabled")
+    private val indexOnLowBatteryKey = booleanPreferencesKey("index_on_low_battery")
 
     val latinOcrEnabled: Flow<Boolean> = context.datastore.data.map { preferences ->
         preferences[latinOcrEnabledKey] ?: true // Default to enabled for Latin OCR
@@ -772,6 +773,13 @@ class SettingsOcrImpl(
 
     val devanagariOcrEnabled: Flow<Boolean> = context.datastore.data.map { preferences ->
         preferences[devanagariOcrEnabledKey] ?: false // Default to disabled for Devanagari OCR
+    }
+
+    /** Whether background OCR indexing is allowed to run while the device reports low battery.
+     * Defaults to true, matching the existing hardcoded behavior -- this only exposes it as a
+     * user-facing choice, it isn't a behavior change by default. */
+    val indexOnLowBattery: Flow<Boolean> = context.datastore.data.map { preferences ->
+        preferences[indexOnLowBatteryKey] ?: true
     }
 
     fun setLatinOcrEnabled(enabled: Boolean) = viewModelScope.launch {
@@ -783,6 +791,12 @@ class SettingsOcrImpl(
     fun setDevanagariOcrEnabled(enabled: Boolean) = viewModelScope.launch {
         context.datastore.edit { preferences ->
             preferences[devanagariOcrEnabledKey] = enabled
+        }
+    }
+
+    fun setIndexOnLowBattery(enabled: Boolean) = viewModelScope.launch {
+        context.datastore.edit { preferences ->
+            preferences[indexOnLowBatteryKey] = enabled
         }
     }
 }

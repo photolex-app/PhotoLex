@@ -59,6 +59,7 @@ fun OcrLanguageModelsPage(
     // OCR settings state
     val latinOcrEnabled by mainViewModel.settings.Ocr.latinOcrEnabled.collectAsStateWithLifecycle(initialValue = true)
     val devanagariOcrEnabled by mainViewModel.settings.Ocr.devanagariOcrEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val indexOnLowBattery by mainViewModel.settings.Ocr.indexOnLowBattery.collectAsStateWithLifecycle(initialValue = true)
 
     Log.d(TAG, "OcrLanguageModelsPage composed - Latin OCR: $latinOcrEnabled, Devanagari OCR: $devanagariOcrEnabled")
     
@@ -229,7 +230,7 @@ fun OcrLanguageModelsPage(
                 summary = "Hindi, Marathi, Nepali, Sanskrit, and other Devanagari-script languages",
                 iconResID = R.drawable.ocr,
                 checked = devanagariOcrEnabled,
-                position = RowPosition.Bottom,
+                position = RowPosition.Middle,
                 showBackground = false,
                 onSwitchClick = { enabled ->
                     Log.d(TAG, "Devanagari OCR toggle clicked: $enabled")
@@ -247,6 +248,21 @@ fun OcrLanguageModelsPage(
                             devanagariOcrManager.pauseProcessing()
                         }
                     }
+                }
+            )
+
+            // Index-on-low-battery setting -- previously hardcoded permissive (always allowed),
+            // now a real user-facing choice. Defaults to on, matching prior behavior.
+            PreferencesSwitchRow(
+                title = "Index even on low battery",
+                summary = "When off, background indexing pauses until the battery isn't low. Manually tapping \"index now\" is unaffected.",
+                iconResID = R.drawable.ocr,
+                checked = indexOnLowBattery,
+                position = RowPosition.Bottom,
+                showBackground = false,
+                onSwitchClick = { enabled ->
+                    Log.d(TAG, "Index on low battery toggle clicked: $enabled")
+                    mainViewModel.settings.Ocr.setIndexOnLowBattery(enabled)
                 }
             )
 

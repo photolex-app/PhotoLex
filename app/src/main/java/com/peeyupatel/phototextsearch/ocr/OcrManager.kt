@@ -14,6 +14,8 @@ import androidx.work.workDataOf
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.entities.OcrProgressEntity
 import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
+import com.peeyupatel.phototextsearch.datastore.Ocr
+import com.peeyupatel.phototextsearch.datastore.Settings
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import com.peeyupatel.phototextsearch.ocr.MediaContentObserver
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -42,12 +45,17 @@ class OcrManager(
 
     private val workManager = WorkManager.getInstance(context)
     private val notificationManager = OcrNotificationManager(context)
+    private val settings by lazy { Settings(context, CoroutineScope(Dispatchers.IO)) }
     private var progressMonitorJob: Job? = null
-    
+
+    /** Reads the user-facing "index even on low battery" setting -- exposes the previously
+     * hardcoded-permissive choice as a real toggle, defaulting to the old behavior. */
+    private suspend fun requiresBatteryNotLow(): Boolean = !settings.Ocr.indexOnLowBattery.first()
+
     /**
      * Start OCR processing for a single image
      */
-    fun processImage(mediaItem: MediaStoreData): UUID {
+    suspend fun processImage(mediaItem: MediaStoreData): UUID {
         Log.d(TAG, "Starting OCR for image: ${mediaItem.id}")
 
         val inputData = workDataOf(
@@ -57,7 +65,7 @@ class OcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<OcrIndexingWorker>()
@@ -78,9 +86,12 @@ class OcrManager(
     }
 
     /**
-     * Process image from MediaContentObserver
+     * Process image from MediaContentObserver.
+     * @param requireCharging true for automatic, non-user-initiated re-indexing (e.g. triggered
+     * by a MediaStore content change) -- keeps background re-index from running on battery at
+     * all, while user-initiated "index now" flows stay unconstrained by passing false.
      */
-    fun processImage(imageDetails: MediaContentObserver.ImageDetails): UUID {
+    suspend fun processImage(imageDetails: MediaContentObserver.ImageDetails, requireCharging: Boolean = false): UUID {
         Log.d(TAG, "Starting OCR for new image: ${imageDetails.id}")
 
         val inputData = workDataOf(
@@ -90,7 +101,8 @@ class OcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
+            .setRequiresCharging(requireCharging)
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<OcrIndexingWorker>()
@@ -109,21 +121,22 @@ class OcrManager(
 
         return workRequest.id
     }
-    
+
     /**
-     * Start batch OCR processing for multiple images
+     * Start batch OCR processing for multiple images.
+     * @param requireCharging true for automatic, non-user-initiated re-indexing (e.g. triggered
+     * by MediaContentObserver noticing new/changed images) -- user-initiated "index now"/manual
+     * batch processing passes false (the default) to stay unconstrained as before.
      */
-    fun processBatch(batchSize: Int = OcrIndexingWorker.DEFAULT_BATCH_SIZE): UUID {
+    suspend fun processBatch(batchSize: Int = OcrIndexingWorker.DEFAULT_BATCH_SIZE, requireCharging: Boolean = false): UUID {
         Log.d(TAG, "Starting batch OCR processing with batch size: $batchSize")
 
         // Start foreground service to ensure processing continues in background
         OcrForegroundService.startLatinOcr(context)
 
         // Update processing status
-        CoroutineScope(Dispatchers.IO).launch {
-            database.ocrProgressDao().updateProcessingStatus(true)
-            Log.d(TAG, "Updated processing status to true")
-        }
+        database.ocrProgressDao().updateProcessingStatus(true)
+        Log.d(TAG, "Updated processing status to true")
 
         val inputData = workDataOf(
             OcrIndexingWorker.KEY_BATCH_SIZE to batchSize,
@@ -132,8 +145,8 @@ class OcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
-            .setRequiresCharging(false)
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
+            .setRequiresCharging(requireCharging)
             .setRequiresDeviceIdle(false)
             .build()
 
@@ -183,7 +196,7 @@ class OcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()

@@ -83,8 +83,9 @@ class MediaContentObserver(
                         // Update total count in progress
                         updateTotalImageCount()
                         
-                        // Process the new image
-                        ocrManager.processImage(imageDetails)
+                        // Process the new image -- automatic, not user-initiated, so require
+                        // charging rather than running unconstrained like manual "index now"
+                        ocrManager.processImage(imageDetails, requireCharging = true)
                         
                         Log.d(TAG, "Started OCR processing for new image: ${imageDetails.id}")
                     }
@@ -111,8 +112,10 @@ class MediaContentObserver(
             if (processedCount < totalImages) {
                 Log.d(TAG, "Found ${totalImages - processedCount} unprocessed images")
 
-                // Start batch processing for unprocessed images
-                ocrManager.processBatch()
+                // Start batch processing for unprocessed images -- automatic re-index
+                // triggered by a MediaStore content change, so require charging rather than
+                // running unconstrained like a manual "index now" batch
+                ocrManager.processBatch(requireCharging = true)
             }
 
         } catch (e: Exception) {
