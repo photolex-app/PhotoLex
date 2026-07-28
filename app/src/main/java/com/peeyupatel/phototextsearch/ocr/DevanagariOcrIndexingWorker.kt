@@ -105,6 +105,8 @@ class DevanagariOcrIndexingWorker(
                     preScannedAt = System.currentTimeMillis() / 1000
                 )).copy(category = category, categorizedAt = System.currentTimeMillis() / 1000)
             )
+
+            DocumentSimilarityMatcher.onOcrResultUpdated(mediaId, extractedText)
         } catch (e: Exception) {
             Log.w(TAG, "Category classification failed for $mediaId: ${e.message}")
         }

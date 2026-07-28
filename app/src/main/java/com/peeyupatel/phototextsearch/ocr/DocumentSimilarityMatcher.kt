@@ -2,6 +2,8 @@ package com.peeyupatel.phototextsearch.ocr
 
 import android.content.Context
 import com.peeyupatel.phototextsearch.database.MediaDatabase
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.math.ln
 
 /**
@@ -73,6 +75,59 @@ object DocumentSimilarityMatcher {
 
     data class Match(val mediaId: Long, val score: Double, val sharedTermCount: Int)
 
+    // Cached corpus (per-document term sets + corpus-wide document frequency), so repeated
+    // findSimilar() calls don't re-tokenize every OCR'd document from scratch every time --
+    // only rebuilt once per process, then kept in sync incrementally via onOcrResultUpdated().
+    private val cacheMutex = Mutex()
+    private var cachedTermsByMediaId: MutableMap<Long, Set<String>>? = null
+    private val cachedDocumentFrequency: MutableMap<String, Int> = mutableMapOf()
+
+    /**
+     * Incrementally update the cached corpus for one document as soon as its OCR result lands,
+     * instead of waiting for the next findSimilar() call to rebuild everything from scratch.
+     * No-op if the cache hasn't been built yet (no findSimilar() call has happened this process)
+     * -- the first findSimilar() call builds it fresh from the database anyway, so nothing is
+     * lost, just deferred until it's actually needed.
+     */
+    suspend fun onOcrResultUpdated(mediaId: Long, extractedText: String) {
+        cacheMutex.withLock {
+            val terms = cachedTermsByMediaId ?: return
+            val newTerms = significantTerms(extractedText)
+            terms[mediaId]?.let { oldTerms ->
+                for (term in oldTerms) {
+                    val count = (cachedDocumentFrequency[term] ?: 1) - 1
+                    if (count <= 0) cachedDocumentFrequency.remove(term) else cachedDocumentFrequency[term] = count
+                }
+            }
+            for (term in newTerms) {
+                cachedDocumentFrequency[term] = (cachedDocumentFrequency[term] ?: 0) + 1
+            }
+            terms[mediaId] = newTerms
+        }
+    }
+
+    private suspend fun getOrBuildCorpus(database: MediaDatabase): Pair<Map<Long, Set<String>>, Map<String, Int>> {
+        cacheMutex.withLock {
+            cachedTermsByMediaId?.let { return it to cachedDocumentFrequency }
+
+            val allRows = database.ocrTextDao().getAllMediaIdAndText() +
+                database.devanagariOcrTextDao().getAllMediaIdAndText()
+
+            val terms = allRows.associateTo(mutableMapOf()) { it.mediaId to significantTerms(it.extractedText) }
+            val df = mutableMapOf<String, Int>()
+            for (docTerms in terms.values) {
+                for (term in docTerms) {
+                    df[term] = (df[term] ?: 0) + 1
+                }
+            }
+
+            cachedTermsByMediaId = terms
+            cachedDocumentFrequency.clear()
+            cachedDocumentFrequency.putAll(df)
+            return terms to cachedDocumentFrequency
+        }
+    }
+
     /**
      * @param sourceMediaId the example photo the user picked
      * @param minSharedTerms results need at least this many distinctive words in common --
@@ -108,21 +163,13 @@ object DocumentSimilarityMatcher {
         val sourceTerms = significantTerms(sourceText)
         if (sourceTerms.isEmpty()) return emptyList()
 
-        val allRows = database.ocrTextDao().getAllMediaIdAndText() +
-            database.devanagariOcrTextDao().getAllMediaIdAndText()
-
         // Tokenize every row once, reused both to build corpus-wide document frequency (so
         // boilerplate shared across many unrelated document types can be weighted down) and to
-        // score candidates against the source.
-        val termsByMediaId = allRows.associate { it.mediaId to significantTerms(it.extractedText) }
+        // score candidates against the source. Cached across calls (see getOrBuildCorpus/
+        // onOcrResultUpdated) instead of re-tokenizing the whole corpus on every single tap.
+        val (termsByMediaId, documentFrequency) = getOrBuildCorpus(database)
 
         val totalDocs = termsByMediaId.size.coerceAtLeast(1)
-        val documentFrequency = mutableMapOf<String, Int>()
-        for (terms in termsByMediaId.values) {
-            for (term in terms) {
-                documentFrequency[term] = (documentFrequency[term] ?: 0) + 1
-            }
-        }
 
         fun idf(term: String): Double {
             val df = documentFrequency[term] ?: return 0.0

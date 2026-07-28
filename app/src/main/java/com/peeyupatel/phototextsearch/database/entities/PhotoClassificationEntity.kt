@@ -34,7 +34,14 @@ data class PhotoClassificationEntity(
     val category: String? = null,
 
     @ColumnInfo(name = "categorized_at")
-    val categorizedAt: Long? = null
+    val categorizedAt: Long? = null,
+
+    /** Difference-hash (dHash) fingerprint of the pre-scan's downsampled bitmap, used to
+     * detect near-identical burst/duplicate photos so full OCR can be skipped and the
+     * result copied from an already-processed neighbor instead. Null for rows scanned
+     * before this field existed. */
+    @ColumnInfo(name = "d_hash")
+    val dHash: Long? = null
 ) {
     companion object {
         const val CATEGORY_RECEIPT = "receipt"

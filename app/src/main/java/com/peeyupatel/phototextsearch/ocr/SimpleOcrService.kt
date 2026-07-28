@@ -18,10 +18,12 @@ class SimpleOcrService(private val context: Context) {
     companion object {
         private const val TAG = "SimpleOcrService"
         private const val BATCH_SIZE = 10
-        
+        private const val FUZZY_MAX_EDIT_DISTANCE = 2
+        private const val FUZZY_CANDIDATE_LIMIT = 200
+
         @Volatile
         private var INSTANCE: SimpleOcrService? = null
-        
+
         fun getInstance(context: Context): SimpleOcrService {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: SimpleOcrService(context.applicationContext).also { INSTANCE = it }
@@ -177,8 +179,16 @@ class SimpleOcrService(private val context: Context) {
 
                 // Search Latin OCR table
                 try {
-                    // Strategy 1: Exact phrase search in Latin OCR
-                    val latinExactResults = database.ocrTextDao().searchOcrTextFallback(query)
+                    // Strategy 1: Exact phrase search in Latin OCR -- FTS4 MATCH against the
+                    // tokenized index first (can use the index, unlike a leading-wildcard LIKE
+                    // scan), falling back to the old LIKE-based search if MATCH's query syntax
+                    // rejects this particular input (e.g. stray special characters).
+                    val latinExactResults = try {
+                        database.ocrTextDao().searchOcrTextFts(ftsPhraseQuery(query))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Latin FTS exact search failed, falling back to LIKE: ${e.message}")
+                        database.ocrTextDao().searchOcrTextFallback(query)
+                    }
                     results.addAll(latinExactResults.map { it.mediaId })
                     Log.d(TAG, "Latin exact search found ${latinExactResults.size} results")
                 } catch (e: Exception) {
@@ -200,9 +210,13 @@ class SimpleOcrService(private val context: Context) {
                 if (words.size > 1) {
                     for (word in words) {
                         if (word.length >= 2) {
-                            // Search Latin OCR for individual words
+                            // Search Latin OCR for individual words -- FTS prefix match first
                             try {
-                                val latinWordResults = database.ocrTextDao().searchOcrTextFallback(word)
+                                val latinWordResults = try {
+                                    database.ocrTextDao().searchOcrTextFts(ftsPrefixQuery(word))
+                                } catch (e: Exception) {
+                                    database.ocrTextDao().searchOcrTextFallback(word)
+                                }
                                 results.addAll(latinWordResults.map { it.mediaId })
                             } catch (e: Exception) {
                                 Log.w(TAG, "Latin word search failed for '$word': ${e.message}")
@@ -230,7 +244,11 @@ class SimpleOcrService(private val context: Context) {
                         Log.d(TAG, "Cross-language search: '$query' -> '$translatedQuery'")
 
                         try {
-                            val latinTranslatedResults = database.ocrTextDao().searchOcrTextFallback(translatedQuery)
+                            val latinTranslatedResults = try {
+                                database.ocrTextDao().searchOcrTextFts(ftsPhraseQuery(translatedQuery))
+                            } catch (e: Exception) {
+                                database.ocrTextDao().searchOcrTextFallback(translatedQuery)
+                            }
                             results.addAll(latinTranslatedResults.map { it.mediaId })
                         } catch (e: Exception) {
                             Log.w(TAG, "Latin translated search failed: ${e.message}")
@@ -247,6 +265,19 @@ class SimpleOcrService(private val context: Context) {
                     Log.w(TAG, "Cross-language search step failed, continuing with same-language results: ${e.message}")
                 }
 
+                // Fuzzy fallback: only when every exact/prefix/cross-language strategy above
+                // found nothing, catch OCR misreads (e.g. "rn"/"m", "0"/"O" confusions) that no
+                // exact-match strategy could ever find. Bounded to a small, recent candidate set
+                // (not the whole corpus) to keep this cheap since it's a last-resort scan, not
+                // an index lookup.
+                if (results.isEmpty()) {
+                    try {
+                        results.addAll(fuzzySearchFallback(query))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Fuzzy fallback search failed: ${e.message}")
+                    }
+                }
+
                 val mediaIds = results.toList()
                 Log.d(TAG, "Found ${mediaIds.size} total images matching '$query' across both Latin and Devanagari OCR")
                 mediaIds
@@ -258,18 +289,81 @@ class SimpleOcrService(private val context: Context) {
     }
 
     /**
-     * Process query for FTS search (temporarily disabled)
-     * Based on ScreenshotGo's processQuery method
+     * Build an FTS4 MATCH phrase query for an exact/translated-query search. Double quotes are
+     * stripped rather than escaped -- FTS4's escaping story for embedded quotes is unreliable
+     * across sqlite versions, and every call site here already falls back to the LIKE-based
+     * search if MATCH throws, so a stripped-down phrase is a safe, simple default.
      */
-    /*
-    private fun processQueryForFts(query: String): String {
-        // For FTS, we add wildcards to each word for prefix matching
-        return query.trim()
-            .split("\\s+".toRegex())
-            .filter { it.isNotBlank() }
-            .joinToString(" ") { "$it*" }
+    private fun ftsPhraseQuery(query: String): String {
+        val sanitized = query.trim().replace("\"", "")
+        return "\"$sanitized\""
     }
-    */
+
+    /**
+     * Build an FTS4 MATCH prefix query for a single word.
+     */
+    private fun ftsPrefixQuery(word: String): String {
+        val sanitized = word.trim().replace("\"", "").replace("*", "")
+        return "$sanitized*"
+    }
+
+    /**
+     * Last-resort fuzzy match: scan a small, bounded set of the most recently OCR'd rows (not
+     * the whole corpus) and check whether any word in each row's text is within a small edit
+     * distance of any query word -- catches OCR misreads that no exact/prefix FTS match ever
+     * could, at the cost of being a linear scan rather than an index lookup, which is why it's
+     * only run when every faster strategy already came back empty.
+     */
+    private suspend fun fuzzySearchFallback(query: String): List<Long> {
+        val queryWords = query.trim().lowercase().split("\\s+".toRegex()).filter { it.length >= 3 }
+        if (queryWords.isEmpty()) return emptyList()
+
+        val candidates = database.ocrTextDao().getRecentOcrTexts(FUZZY_CANDIDATE_LIMIT)
+        val matches = mutableListOf<Long>()
+
+        for (candidate in candidates) {
+            if (candidate.extractedText.isBlank()) continue
+            val candidateWords = candidate.extractedText.lowercase().split("\\W+".toRegex()).filter { it.length >= 3 }
+            val isMatch = queryWords.any { queryWord ->
+                candidateWords.any { candidateWord ->
+                    // Cheap length-difference prune before the actual edit-distance computation
+                    kotlin.math.abs(queryWord.length - candidateWord.length) <= FUZZY_MAX_EDIT_DISTANCE &&
+                        boundedLevenshtein(queryWord, candidateWord, FUZZY_MAX_EDIT_DISTANCE) <= FUZZY_MAX_EDIT_DISTANCE
+                }
+            }
+            if (isMatch) matches.add(candidate.mediaId)
+        }
+
+        Log.d(TAG, "Fuzzy fallback found ${matches.size} results among ${candidates.size} recent candidates")
+        return matches
+    }
+
+    /**
+     * Levenshtein distance with an early exit once it's clear the result will exceed [maxDistance]
+     * -- exact value beyond that threshold is never needed, only "close enough or not".
+     */
+    private fun boundedLevenshtein(a: String, b: String, maxDistance: Int): Int {
+        if (kotlin.math.abs(a.length - b.length) > maxDistance) return maxDistance + 1
+
+        var previousRow = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val currentRow = IntArray(b.length + 1)
+            currentRow[0] = i
+            var rowMin = currentRow[0]
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                currentRow[j] = minOf(
+                    previousRow[j] + 1,
+                    currentRow[j - 1] + 1,
+                    previousRow[j - 1] + cost
+                )
+                rowMin = minOf(rowMin, currentRow[j])
+            }
+            if (rowMin > maxDistance) return maxDistance + 1
+            previousRow = currentRow
+        }
+        return previousRow[b.length]
+    }
     
     /**
      * Get OCR text for a specific image (from both Latin and Devanagari)

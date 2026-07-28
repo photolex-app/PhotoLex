@@ -27,4 +27,10 @@ interface PhotoClassificationDao {
 
     @Query("SELECT COUNT(*) FROM photo_classification WHERE category = :category")
     suspend fun getCategoryCount(category: String): Int
+
+    /** Recently pre-scanned rows that have a dHash, used as the neighbor pool for
+     * burst/duplicate detection -- recency is a proxy for "close in date_added" since
+     * pre-scans happen in date-ordered batches. */
+    @Query("SELECT * FROM photo_classification WHERE d_hash IS NOT NULL ORDER BY pre_scanned_at DESC LIMIT :limit")
+    suspend fun getRecentWithHash(limit: Int): List<PhotoClassificationEntity>
 }

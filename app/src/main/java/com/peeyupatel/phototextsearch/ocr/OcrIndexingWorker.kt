@@ -78,18 +78,19 @@ class OcrIndexingWorker(
         // scan just leaves that photo unprioritized this round, it'll still get processed).
         for (candidate in candidates) {
             if (!existing.containsKey(candidate.id)) {
-                val hasText = try {
-                    preScanner.hasTextOrNull(candidate.uri)
+                val scan = try {
+                    preScanner.scanWithHash(candidate.uri)
                 } catch (e: Exception) {
                     Log.w(TAG, "Pre-scan threw for ${candidate.id}: ${e.message}")
-                    null
+                    FastTextPreScanner.PreScanResult(null, null)
                 }
-                if (hasText != null) {
+                if (scan.hasText != null) {
                     classificationDao.upsert(
                         PhotoClassificationEntity(
                             mediaId = candidate.id,
-                            hasText = hasText,
-                            preScannedAt = System.currentTimeMillis() / 1000
+                            hasText = scan.hasText,
+                            preScannedAt = System.currentTimeMillis() / 1000,
+                            dHash = scan.dHash
                         )
                     )
                 }
@@ -98,6 +99,41 @@ class OcrIndexingWorker(
 
         val refreshed = classificationDao.getByMediaIds(candidates.map { it.id }).associateBy { it.mediaId }
         return candidates.sortedByDescending { refreshed[it.id]?.hasText == true }
+    }
+
+    /**
+     * Looks for a near-identical, already-OCR'd neighbor for each candidate using recently
+     * pre-scanned rows (a proxy for date_added adjacency, since pre-scans happen in
+     * date-ordered batches) plus the current candidate pool. Conservative: only flags a
+     * duplicate when within DUPLICATE_HAMMING_THRESHOLD and the neighbor already has a real
+     * OCR result to copy. A same-batch pair where neither photo has been OCR'd before is not
+     * caught by this (documented limitation, not a correctness risk -- those photos simply get
+     * OCR'd normally, same as before this feature existed).
+     */
+    private suspend fun findDuplicateSources(
+        candidates: List<ImageInfo>,
+        classifications: Map<Long, PhotoClassificationEntity>
+    ): Map<Long, Long> {
+        val classificationDao = classificationDb.photoClassificationDao()
+        val neighborPool = (classificationDao.getRecentWithHash(100) + classifications.values)
+            .filter { it.dHash != null }
+            .distinctBy { it.mediaId }
+
+        val duplicates = mutableMapOf<Long, Long>()
+        for (candidate in candidates) {
+            val candidateHash = classifications[candidate.id]?.dHash ?: continue
+            val match = neighborPool.firstOrNull { neighbor ->
+                neighbor.mediaId != candidate.id &&
+                    FastTextPreScanner.hammingDistance(candidateHash, neighbor.dHash!!) <= FastTextPreScanner.DUPLICATE_HAMMING_THRESHOLD
+            } ?: continue
+
+            // Only worth skipping full OCR if the neighbor already has a real result to copy
+            val sourceOcr = database.ocrTextDao().getOcrTextByMediaId(match.mediaId)
+            if (sourceOcr != null) {
+                duplicates[candidate.id] = match.mediaId
+            }
+        }
+        return duplicates
     }
 
     /**
@@ -120,6 +156,10 @@ class OcrIndexingWorker(
                     categorizedAt = System.currentTimeMillis() / 1000
                 )
             )
+
+            // Keep Find Similar's cached corpus in sync as new OCR results land, instead of it
+            // only refreshing on its own next unrelated rebuild.
+            DocumentSimilarityMatcher.onOcrResultUpdated(mediaId, extractedText)
         } catch (e: Exception) {
             Log.w(TAG, "Category classification failed for $mediaId: ${e.message}")
         }
@@ -330,9 +370,20 @@ class OcrIndexingWorker(
             // to skip the expensive full-resolution OCR call on confidently-no-text photos.
             // Unknown/not-yet-scanned (null) still gets full OCR -- this only skips when we
             // already have a confident answer, never guesses.
-            val hasTextByMediaId = classificationDb.photoClassificationDao()
+            val classificationsForBatch = classificationDb.photoClassificationDao()
                 .getByMediaIds(unprocessedImages.map { it.id })
-                .associateBy({ it.mediaId }, { it.hasText })
+                .associateBy { it.mediaId }
+            val hasTextByMediaId = classificationsForBatch.mapValues { it.value.hasText }
+
+            // Near-duplicate/burst-shot skip: copy an already-OCR'd neighbor's result instead
+            // of re-running full extraction. Best-effort -- if this fails for any reason, every
+            // image just falls through to normal processing, same as if this feature didn't exist.
+            val duplicateSourceByMediaId = try {
+                findDuplicateSources(unprocessedImages, classificationsForBatch)
+            } catch (e: Exception) {
+                Log.w(TAG, "Duplicate detection failed, continuing without it: ${e.message}")
+                emptyMap()
+            }
 
             if (unprocessedImages.isEmpty()) {
                 Log.d(TAG, "No unprocessed images found using normal method")
@@ -401,6 +452,30 @@ class OcrIndexingWorker(
                                 Log.d(TAG, "Image ${imageInfo.id} already processed, skipping")
                                 processedCount.incrementAndGet()
                                 return@launch
+                            }
+
+                            // Near-duplicate of an already-OCR'd neighbor -- copy its result
+                            // instead of running full extraction again.
+                            val duplicateSourceId = duplicateSourceByMediaId[imageInfo.id]
+                            if (duplicateSourceId != null) {
+                                val sourceEntity = database.ocrTextDao().getOcrTextByMediaId(duplicateSourceId)
+                                if (sourceEntity != null) {
+                                    val copiedEntity = OcrTextEntity(
+                                        mediaId = imageInfo.id,
+                                        extractedText = sourceEntity.extractedText,
+                                        extractionTimestamp = System.currentTimeMillis() / 1000,
+                                        confidenceScore = sourceEntity.confidenceScore,
+                                        textBlocksCount = sourceEntity.textBlocksCount,
+                                        processingTimeMs = 0L
+                                    )
+                                    database.ocrTextDao().insertOcrText(copiedEntity)
+                                    categorizeAfterExtraction(imageInfo.id, sourceEntity.extractedText, imageInfo.width, imageInfo.height)
+                                    processedCount.incrementAndGet()
+                                    Log.d(TAG, "Skipped full OCR for image ${imageInfo.id} (near-duplicate of $duplicateSourceId, copied result)")
+                                    updateProgressInDatabase(processedCount.get(), unprocessedImages.size, true)
+                                    updateProgress(processedCount.get(), unprocessedImages.size, "Image ${imageInfo.id}")
+                                    return@launch
+                                }
                             }
 
                             // Skip the expensive full-resolution OCR call entirely when the fast

@@ -25,6 +25,7 @@ import com.peeyupatel.phototextsearch.database.entities.SearchHistoryEntity
 import com.peeyupatel.phototextsearch.database.entities.SecuredItemEntity
 import com.peeyupatel.phototextsearch.database.entities.TrashedItemEntity
 import com.peeyupatel.phototextsearch.database.migrations.Migration7to8
+import com.peeyupatel.phototextsearch.database.migrations.Migration8to9
 
 @Database(entities =
     [
@@ -36,15 +37,16 @@ import com.peeyupatel.phototextsearch.database.migrations.Migration7to8
         OcrProgressEntity::class,
         DevanagariOcrTextEntity::class,
         DevanagariOcrProgressEntity::class,
-        // OcrTextFtsEntity::class, // Temporarily disabled for build compatibility
+        OcrTextFtsEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 8, // Updated to version 8 for Devanagari OCR
+    version = 9, // Updated to version 9 to re-enable FTS4 full-text search
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         // AutoMigration(from = 4, to = 5) - Manual migration needed
         // AutoMigration(from = 5, to = 6) - Manual migration needed for FTS
         // AutoMigration(from = 7, to = 8) - Manual migration needed for Devanagari OCR
+        // AutoMigration(from = 8, to = 9) - Manual migration needed for FTS4 re-enable
     ]
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -79,7 +81,8 @@ abstract class MediaDatabase : RoomDatabase() {
                     Migration4to5(appContext),
                     Migration5to6(appContext),
                     Migration6to7(appContext),
-                    Migration7to8
+                    Migration7to8,
+                    Migration8to9
                 )
                 .enableMultiInstanceInvalidation()
                 .build()

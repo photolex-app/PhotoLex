@@ -29,17 +29,17 @@ interface OcrTextDao {
     @Query("SELECT * FROM ocr_text WHERE extracted_text LIKE :searchQuery")
     suspend fun searchOcrText(searchQuery: String): List<OcrTextEntity>
 
-    // FTS search temporarily disabled - will be re-enabled later
-    /*
+    // Primary search path: FTS4 MATCH against the tokenized index instead of a leading-wildcard
+    // LIKE scan, which can't use the extracted_text index at all.
     @Query("""
         SELECT ocr.* FROM ocr_text ocr
         JOIN ocr_text_fts fts ON ocr.rowid = fts.rowid
         WHERE ocr_text_fts MATCH :searchQuery
     """)
     suspend fun searchOcrTextFts(searchQuery: String): List<OcrTextEntity>
-    */
 
-    // Fallback search for when FTS fails
+    // Fallback search for when FTS query syntax fails (e.g. a raw query string with characters
+    // MATCH can't parse) or as a reference for the pre-FTS behavior.
     @Query("SELECT * FROM ocr_text WHERE extracted_text LIKE '%' || :searchQuery || '%'")
     suspend fun searchOcrTextFallback(searchQuery: String): List<OcrTextEntity>
     

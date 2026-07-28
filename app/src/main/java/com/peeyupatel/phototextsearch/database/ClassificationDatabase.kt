@@ -19,7 +19,7 @@ import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntit
  */
 @Database(
     entities = [PhotoClassificationEntity::class, CuratedAlbumEntity::class, CuratedAlbumPhotoEntity::class],
-    version = 2
+    version = 3
 )
 abstract class ClassificationDatabase : RoomDatabase() {
     abstract fun photoClassificationDao(): PhotoClassificationDao
@@ -56,6 +56,12 @@ abstract class ClassificationDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `photo_classification` ADD COLUMN `d_hash` INTEGER")
+            }
+        }
+
         fun getInstance(context: Context): ClassificationDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -63,7 +69,7 @@ abstract class ClassificationDatabase : RoomDatabase() {
                     ClassificationDatabase::class.java,
                     "photo-classification-database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { instance = it }
             }
         }
