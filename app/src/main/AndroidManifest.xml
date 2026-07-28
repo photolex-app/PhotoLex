@@ -5,9 +5,10 @@
     <uses-permission
         android:name="android.permission.REORDER_TASKS"
         tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.ACCESS_NETWORK_STATE"
-        tools:node="remove" />
+    <!-- Required by ML Kit's on-device Entity Extraction / Language ID / Image Labeling,
+         which check connectivity before attempting a one-time Play Services model download.
+         Does not itself grant network access (see INTERNET), only connectivity state checks. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission
         android:name="android.permission.READ_MEDIA_IMAGES"
         android:minSdkVersion="33" />
