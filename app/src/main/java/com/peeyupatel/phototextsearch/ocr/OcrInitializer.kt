@@ -2,11 +2,7 @@ package com.peeyupatel.phototextsearch.ocr
 
 import android.content.Context
 import android.util.Log
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,20 +22,10 @@ object OcrInitializer {
         
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val database = Room.databaseBuilder(
-                    context,
-                    MediaDatabase::class.java,
-                    "media-database"
-                ).apply {
-                    addMigrations(
-                        Migration3to4(context),
-                        Migration4to5(context),
-                        Migration5to6(context)
-                    )
-                }.build()
-                
+                val database = MediaDatabase.getInstance(context)
+
                 val ocrManager = OcrManager(context, database)
-                
+
                 // Check if we need to start background OCR processing
                 val ocrStats = ocrManager.getOcrStats()
                 Log.d(TAG, "OCR Stats - Total processed: ${ocrStats.totalProcessed}, Avg confidence: ${ocrStats.averageConfidence}")
@@ -63,20 +49,10 @@ object OcrInitializer {
     fun processImage(context: Context, mediaId: Long, mediaUri: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val database = Room.databaseBuilder(
-                    context,
-                    MediaDatabase::class.java,
-                    "media-database"
-                ).apply {
-                    addMigrations(
-                        Migration3to4(context),
-                        Migration4to5(context),
-                        Migration5to6(context)
-                    )
-                }.build()
-                
+                val database = MediaDatabase.getInstance(context)
+
                 val ocrManager = OcrManager(context, database)
-                
+
                 // Check if already processed
                 if (!ocrManager.isImageProcessed(mediaId)) {
                     Log.d(TAG, "Starting OCR processing for image: $mediaId")

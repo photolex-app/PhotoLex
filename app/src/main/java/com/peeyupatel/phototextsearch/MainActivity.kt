@@ -95,7 +95,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
-import androidx.room.Room
 import com.bumptech.glide.Glide
 import com.bumptech.glide.MemoryCategory
 import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarBox
@@ -139,10 +138,6 @@ import com.peeyupatel.phototextsearch.compose.single_photo.SingleHiddenPhotoView
 import com.peeyupatel.phototextsearch.compose.single_photo.SinglePhotoView
 import com.peeyupatel.phototextsearch.compose.single_photo.SingleTrashedPhotoView
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.ocr.SimpleOcrService
 import com.peeyupatel.phototextsearch.ocr.OcrManager
 import com.peeyupatel.phototextsearch.ocr.DevanagariOcrManager
@@ -247,19 +242,7 @@ class MainActivity : ComponentActivity() {
         configureSystemUI()
 
         Log.d(TAG, "Creating database instance with migrations...")
-        val mediaDatabase = Room.databaseBuilder(
-            applicationContext,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(applicationContext),
-                Migration4to5(applicationContext),
-                Migration5to6(applicationContext),
-                Migration6to7(applicationContext),
-                com.peeyupatel.phototextsearch.database.migrations.Migration7to8
-            )
-        }.build()
+        val mediaDatabase = MediaDatabase.getInstance(applicationContext)
         applicationDatabase = mediaDatabase
 
         // Verify database version and Devanagari tables

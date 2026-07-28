@@ -12,15 +12,10 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.room.Room
 import androidx.work.WorkManager
 import com.peeyupatel.phototextsearch.MainActivity
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.datastore.Settings
 import com.peeyupatel.phototextsearch.datastore.Ocr
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -133,18 +128,7 @@ class OcrForegroundService : Service() {
         workManager = WorkManager.getInstance(this)
         
         // Initialize database
-        database = Room.databaseBuilder(
-            applicationContext,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(applicationContext),
-                Migration4to5(applicationContext),
-                Migration5to6(applicationContext),
-                Migration6to7(applicationContext)
-            )
-        }.build()
+        database = MediaDatabase.getInstance(applicationContext)
         
         // Initialize settings
         settings = Settings(applicationContext, serviceScope)
@@ -349,54 +333,50 @@ class OcrForegroundService : Service() {
     }
 
     /**
-     * Start monitoring Latin OCR progress
+     * Observe Latin OCR progress. Reacts to DB writes made by OcrManager's own progress
+     * monitor instead of running an independent 2-second poll loop of its own - the two
+     * loops previously duplicated the same DB reads and notification updates in parallel.
      */
     private fun startLatinOcrMonitoring() {
         latinOcrMonitorJob?.cancel()
         latinOcrMonitorJob = serviceScope.launch {
             try {
-                while (isLatinOcrActive) {
-                    val progress = database.ocrProgressDao().getProgress()
+                database.ocrProgressDao().getProgressFlow().collect { progress ->
                     if (progress != null && progress.isProcessing) {
                         updateServiceNotification()
                     } else if (progress != null && progress.isComplete) {
                         Log.d(TAG, "Latin OCR processing completed")
                         isLatinOcrActive = false
-                        break
+                        checkIfServiceShouldStop()
                     }
-                    delay(2000) // Update every 2 seconds
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in Latin OCR monitoring", e)
+                checkIfServiceShouldStop()
             }
-
-            checkIfServiceShouldStop()
         }
     }
 
     /**
-     * Start monitoring Devanagari OCR progress
+     * Observe Devanagari OCR progress via Flow, same rationale as startLatinOcrMonitoring().
      */
     private fun startDevanagariOcrMonitoring() {
         devanagariOcrMonitorJob?.cancel()
         devanagariOcrMonitorJob = serviceScope.launch {
             try {
-                while (isDevanagariOcrActive) {
-                    val progress = database.devanagariOcrProgressDao().getProgress()
+                database.devanagariOcrProgressDao().getProgressFlow().collect { progress ->
                     if (progress != null && progress.isProcessing) {
                         updateServiceNotification()
                     } else if (progress != null && progress.isComplete) {
                         Log.d(TAG, "Devanagari OCR processing completed")
                         isDevanagariOcrActive = false
-                        break
+                        checkIfServiceShouldStop()
                     }
-                    delay(2000) // Update every 2 seconds
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in Devanagari OCR monitoring", e)
+                checkIfServiceShouldStop()
             }
-
-            checkIfServiceShouldStop()
         }
     }
 

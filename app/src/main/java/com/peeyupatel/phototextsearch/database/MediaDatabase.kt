@@ -1,7 +1,9 @@
 package com.peeyupatel.phototextsearch.database
 
+import android.content.Context
 import androidx.room.AutoMigration
 import androidx.room.Database
+import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.peeyupatel.phototextsearch.database.daos.DevanagariOcrProgressDao
 import com.peeyupatel.phototextsearch.database.daos.DevanagariOcrTextDao
@@ -55,6 +57,34 @@ abstract class MediaDatabase : RoomDatabase() {
     abstract fun devanagariOcrTextDao(): DevanagariOcrTextDao
     abstract fun devanagariOcrProgressDao(): DevanagariOcrProgressDao
     abstract fun searchHistoryDao(): SearchHistoryDao
+
+    companion object {
+        @Volatile
+        private var instance: MediaDatabase? = null
+
+        fun getInstance(context: Context): MediaDatabase {
+            return instance ?: synchronized(this) {
+                instance ?: build(context.applicationContext).also { instance = it }
+            }
+        }
+
+        private fun build(appContext: Context): MediaDatabase {
+            return Room.databaseBuilder(
+                appContext,
+                MediaDatabase::class.java,
+                "media-database"
+            )
+                .addMigrations(
+                    Migration3to4(appContext),
+                    Migration4to5(appContext),
+                    Migration5to6(appContext),
+                    Migration6to7(appContext),
+                    Migration7to8
+                )
+                .enableMultiInstanceInvalidation()
+                .build()
+        }
+    }
 }
 
 

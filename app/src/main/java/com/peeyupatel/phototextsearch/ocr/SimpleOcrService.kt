@@ -4,12 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,18 +30,7 @@ class SimpleOcrService(private val context: Context) {
     }
     
     private val database by lazy {
-        Room.databaseBuilder(
-            context,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(context),
-                Migration4to5(context),
-                Migration5to6(context),
-                Migration6to7(context)
-            )
-        }.build()
+        MediaDatabase.getInstance(context)
     }
     
     private var isProcessing = false

@@ -1,12 +1,7 @@
 package com.peeyupatel.phototextsearch.ocr
 
 import android.content.Context
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import kotlin.math.ln
 
 /**
@@ -103,17 +98,7 @@ object DocumentSimilarityMatcher {
         relativeScoreThreshold: Double = 0.08,
         maxResults: Int = 200
     ): List<Match> {
-        val database = Room.databaseBuilder(
-            context.applicationContext,
-            MediaDatabase::class.java,
-            "media-database"
-        ).addMigrations(
-            Migration3to4(context.applicationContext),
-            Migration4to5(context.applicationContext),
-            Migration5to6(context.applicationContext),
-            Migration6to7(context.applicationContext),
-            com.peeyupatel.phototextsearch.database.migrations.Migration7to8
-        ).build()
+        val database = MediaDatabase.getInstance(context.applicationContext)
 
         val sourceText =
             database.ocrTextDao().getOcrTextByMediaId(sourceMediaId)?.extractedText

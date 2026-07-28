@@ -8,17 +8,12 @@ import androidx.work.Data
 import androidx.work.workDataOf
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
 import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntity
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import android.provider.MediaStore
 import android.net.Uri
-import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
@@ -123,19 +118,7 @@ class DevanagariOcrIndexingWorker(
         try {
             Log.d(TAG, "Creating database instance...")
             // Get database instance
-            val database = Room.databaseBuilder(
-                applicationContext,
-                MediaDatabase::class.java,
-                "media-database"
-            )
-                .addMigrations(
-                    Migration3to4(applicationContext),
-                    Migration4to5(applicationContext),
-                    Migration5to6(applicationContext),
-                    Migration6to7(applicationContext),
-                    com.peeyupatel.phototextsearch.database.migrations.Migration7to8
-                )
-                .build()
+            val database = MediaDatabase.getInstance(applicationContext)
             Log.d(TAG, "✅ Database instance created successfully")
 
             Log.d(TAG, "Parsing input data...")

@@ -4,12 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -118,17 +113,6 @@ class OcrNotificationReceiver : BroadcastReceiver() {
      * Get database instance
      */
     private fun getDatabase(context: Context): MediaDatabase {
-        return Room.databaseBuilder(
-            context,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(context),
-                Migration4to5(context),
-                Migration5to6(context),
-                Migration6to7(context)
-            )
-        }.build()
+        return MediaDatabase.getInstance(context)
     }
 }

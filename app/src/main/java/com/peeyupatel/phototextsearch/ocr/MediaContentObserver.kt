@@ -7,14 +7,11 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -27,38 +24,36 @@ class MediaContentObserver(
     
     companion object {
         private const val TAG = "MediaContentObserver"
+        private const val CHECK_DEBOUNCE_MS = 1500L
     }
-    
+
     private val database by lazy {
-        Room.databaseBuilder(
-            context,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(context),
-                Migration4to5(context),
-                Migration5to6(context),
-                Migration6to7(context)
-            )
-        }.build()
+        MediaDatabase.getInstance(context)
     }
-    
+
     private val ocrManager by lazy {
         OcrManager(context, database)
     }
-    
+
+    private val observerScope = CoroutineScope(Dispatchers.IO)
+    private var pendingCheckJob: Job? = null
+
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        
+
         Log.d(TAG, "Media content changed: $uri")
-        
+
         // Check if this is an image URI
         if (uri != null && isImageUri(uri)) {
             handleNewImage(uri)
         } else {
-            // General media change, check for new images
-            checkForNewImages()
+            // General media change - debounce so a burst of rapid onChange events
+            // (e.g. repeated EXIF/metadata touches) collapses into a single check
+            pendingCheckJob?.cancel()
+            pendingCheckJob = observerScope.launch {
+                delay(CHECK_DEBOUNCE_MS)
+                checkForNewImages()
+            }
         }
     }
     
@@ -75,7 +70,7 @@ class MediaContentObserver(
      * Handle a new image being added
      */
     private fun handleNewImage(uri: Uri) {
-        CoroutineScope(Dispatchers.IO).launch {
+        observerScope.launch {
             try {
                 Log.d(TAG, "Processing new image: $uri")
                 
@@ -104,26 +99,24 @@ class MediaContentObserver(
     /**
      * Check for new images in general
      */
-    private fun checkForNewImages() {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                // Update total image count
-                updateTotalImageCount()
-                
-                // Check if there are unprocessed images
-                val processedIds = database.ocrTextDao().getAllProcessedMediaIds().toSet()
-                val totalImages = getTotalImageCount()
-                
-                if (processedIds.size < totalImages) {
-                    Log.d(TAG, "Found ${totalImages - processedIds.size} unprocessed images")
-                    
-                    // Start batch processing for unprocessed images
-                    ocrManager.processBatch()
-                }
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to check for new images", e)
+    private suspend fun checkForNewImages() {
+        try {
+            // Update total image count
+            updateTotalImageCount()
+
+            // Check if there are unprocessed images (cheap COUNT instead of loading every ID)
+            val processedCount = database.ocrTextDao().getOcrTextCount()
+            val totalImages = getTotalImageCount()
+
+            if (processedCount < totalImages) {
+                Log.d(TAG, "Found ${totalImages - processedCount} unprocessed images")
+
+                // Start batch processing for unprocessed images
+                ocrManager.processBatch()
             }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check for new images", e)
         }
     }
     

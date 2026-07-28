@@ -52,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.room.Room
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,10 +72,6 @@ import com.peeyupatel.phototextsearch.compose.utils.ScrollVisibilityState
 import com.peeyupatel.phototextsearch.compose.utils.handleScrollVisibilityChange
 import com.peeyupatel.phototextsearch.compose.utils.handleBottomBarScrollVisibilityChange
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.ocr.OcrManager
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
 import com.peeyupatel.phototextsearch.datastore.BottomBarTab
@@ -223,18 +218,7 @@ fun SearchPage(
         // OCR progress tracking
         val context = LocalContext.current
         val database = remember {
-            Room.databaseBuilder(
-                context,
-                MediaDatabase::class.java,
-                "media-database"
-            ).apply {
-                addMigrations(
-                    Migration3to4(context),
-                    Migration4to5(context),
-                    Migration5to6(context),
-                    Migration6to7(context)
-                )
-            }.build()
+            MediaDatabase.getInstance(context)
         }
         val ocrManager = remember { OcrManager(context, database) }
         val ocrProgress by ocrManager.getProgressFlow().collectAsStateWithLifecycle(initialValue = null)

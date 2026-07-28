@@ -229,7 +229,7 @@ class OcrManager(
                     if (progress != null) {
                         // Refresh progress with current database state
                         val totalImages = getTotalImageCount()
-                        val totalProcessedImages = database.ocrTextDao().getAllProcessedMediaIds().size
+                        val totalProcessedImages = database.ocrTextDao().getOcrTextCount()
 
                         Log.d(TAG, "Progress monitoring check: $totalProcessedImages/$totalImages (current: ${progress.processedImages}/${progress.totalImages})")
 
@@ -308,7 +308,7 @@ class OcrManager(
         if (progress != null && (progress.isProcessing || progress.isPaused)) {
             // Force refresh the progress data to ensure accurate display
             val totalImages = getTotalImageCount()
-            val totalProcessedImages = database.ocrTextDao().getAllProcessedMediaIds().size
+            val totalProcessedImages = database.ocrTextDao().getOcrTextCount()
 
             Log.d(TAG, "Refreshing progress data: $totalProcessedImages/$totalImages (stored: ${progress.processedImages}/${progress.totalImages})")
 
@@ -344,7 +344,7 @@ class OcrManager(
                 val progress = database.ocrProgressDao().getProgress()
                 if (progress != null) {
                     val totalImages = getTotalImageCount()
-                    val totalProcessedImages = database.ocrTextDao().getAllProcessedMediaIds().size
+                    val totalProcessedImages = database.ocrTextDao().getOcrTextCount()
 
                     val refreshedProgress = progress.copy(
                         processedImages = totalProcessedImages,

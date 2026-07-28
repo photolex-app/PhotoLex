@@ -8,17 +8,14 @@ import androidx.work.Data
 import androidx.work.workDataOf
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
 import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntity
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
+import android.os.Build
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.net.Uri
-import androidx.room.Room
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
@@ -49,18 +46,7 @@ class OcrIndexingWorker(
     }
     
     private val database by lazy {
-        Room.databaseBuilder(
-            applicationContext,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(applicationContext),
-                Migration4to5(applicationContext),
-                Migration5to6(applicationContext),
-                Migration6to7(applicationContext)
-            )
-        }.build()
+        MediaDatabase.getInstance(applicationContext)
     }
     
     private val ocrExtractor by lazy {
@@ -252,16 +238,16 @@ class OcrIndexingWorker(
             iterationCount++
             Log.d(TAG, "Continuous processing iteration $iterationCount")
 
-            // Get current progress
+            // Get current progress (cheap COUNT instead of loading every processed ID)
             val totalImages = getTotalImageCount()
-            val processedMediaIds = database.ocrTextDao().getAllProcessedMediaIds().toSet()
-            val remainingImages = totalImages - processedMediaIds.size
+            val processedCount = database.ocrTextDao().getOcrTextCount()
+            val remainingImages = totalImages - processedCount
 
-            Log.d(TAG, "Progress: ${processedMediaIds.size}/$totalImages processed, $remainingImages remaining")
+            Log.d(TAG, "Progress: $processedCount/$totalImages processed, $remainingImages remaining")
 
             if (remainingImages <= 0) {
                 Log.d(TAG, "All images processed! Stopping continuous processing.")
-                updateProgressInDatabase(processedMediaIds.size, totalImages, false)
+                updateProgressInDatabase(processedCount, totalImages, false)
                 break
             }
 
@@ -381,11 +367,12 @@ class OcrIndexingWorker(
             // blocking a thread), so running several in flight at once lets bitmap decode and
             // OCR inference for different images overlap instead of serializing everything,
             // which was the main real lever on indexing speed (bitmaps are already downsampled
-            // to MAX_IMAGE_SIZE before OCR, so that wasn't the bottleneck). CONCURRENCY is
-            // deliberately conservative (3) since this runs invisibly in the background --
-            // higher settings risk visible battery/thermal impact on a mid-range device, not
-            // just an all-upside tuning knob.
-            val concurrency = 3
+            // to MAX_IMAGE_SIZE before OCR, so that wasn't the bottleneck). Scaled to the
+            // device's core count (capped so background OCR doesn't visibly compete with
+            // foreground UI on many-core devices) and throttled down when the device is
+            // already thermal-throttled, since running full concurrency while hot burns more
+            // power for less actual throughput.
+            val concurrency = currentOcrConcurrency()
             val semaphore = Semaphore(concurrency)
 
             coroutineScope {
@@ -494,7 +481,7 @@ class OcrIndexingWorker(
             // branch was previously only reached on true 100% completion, so a mid-batch pause
             // left isProcessing stuck at true, showing "running" in the notification/UI forever).
             val totalImages = getTotalImageCount()
-            val totalProcessed = database.ocrTextDao().getAllProcessedMediaIds().size
+            val totalProcessed = database.ocrTextDao().getOcrTextCount()
             if (totalProcessed >= totalImages || wasPausedMidRun) {
                 updateProgressInDatabase(totalProcessed, totalImages, false)
                 Log.d(TAG, "All images processed or paused! Total: $totalProcessed")
@@ -511,6 +498,29 @@ class OcrIndexingWorker(
             Log.e(TAG, "Failed to process batch", e)
             Result.failure(workDataOf(KEY_ERRORS to e.message))
         }
+    }
+
+    /**
+     * Concurrency for the batch OCR loop: scaled to available CPU cores (leaving one free for
+     * the rest of the system), capped at 6 so this never overwhelms a many-core device, and
+     * dropped to 1 when the device reports moderate-or-worse thermal throttling so OCR doesn't
+     * keep pushing an already-hot device at full tilt for reduced per-op efficiency.
+     */
+    private fun currentOcrConcurrency(): Int {
+        val coreBased = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 6)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
+                if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
+                    Log.d(TAG, "Thermal status $thermalStatus is elevated, throttling OCR concurrency to 1")
+                    return 1
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read thermal status, using core-based concurrency", e)
+            }
+        }
+        return coreBased
     }
 
     /**
@@ -661,7 +671,7 @@ class OcrIndexingWorker(
         try {
             // Get overall progress instead of just batch progress
             val totalImages = getTotalImageCount()
-            val totalProcessedImages = database.ocrTextDao().getAllProcessedMediaIds().size
+            val totalProcessedImages = database.ocrTextDao().getOcrTextCount()
 
             val currentProgress = database.ocrProgressDao().getProgress()
             val currentTime = System.currentTimeMillis()

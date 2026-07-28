@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import android.util.Log
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.room.Room
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.datastore.Ocr
@@ -23,10 +22,6 @@ import com.peeyupatel.phototextsearch.compose.PreferencesSwitchRow
 import com.peeyupatel.phototextsearch.compose.components.OcrProgressBar
 import com.peeyupatel.phototextsearch.database.entities.OcrProgressEntity
 import com.peeyupatel.phototextsearch.database.MediaDatabase
-import com.peeyupatel.phototextsearch.database.Migration3to4
-import com.peeyupatel.phototextsearch.database.Migration4to5
-import com.peeyupatel.phototextsearch.database.Migration5to6
-import com.peeyupatel.phototextsearch.database.Migration6to7
 import com.peeyupatel.phototextsearch.helpers.RowPosition
 import com.peeyupatel.phototextsearch.ocr.DevanagariOcrManager
 import com.peeyupatel.phototextsearch.ocr.OcrManager
@@ -69,19 +64,7 @@ fun OcrLanguageModelsPage(
     
     // Database instance
     val database = remember {
-        Room.databaseBuilder(
-            context,
-            MediaDatabase::class.java,
-            "media-database"
-        ).apply {
-            addMigrations(
-                Migration3to4(context),
-                Migration4to5(context),
-                Migration5to6(context),
-                Migration6to7(context),
-                com.peeyupatel.phototextsearch.database.migrations.Migration7to8
-            )
-        }.build()
+        MediaDatabase.getInstance(context)
     }
     
     // OCR managers
