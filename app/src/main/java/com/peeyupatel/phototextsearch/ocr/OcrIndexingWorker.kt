@@ -43,6 +43,13 @@ class OcrIndexingWorker(
         const val KEY_ERRORS = "errors"
 
         const val DEFAULT_BATCH_SIZE = 50
+
+        // Weight given to each new instantaneous processing-rate sample when smoothing the
+        // ETA estimate. Has-text vs no-text photos cost ~7-8x differently (FastTextPreScanner's
+        // skip path), so a single raw sample swings wildly depending on which kind of photo
+        // just finished -- a low weight keeps the shown ETA from jumping between "40 minutes"
+        // and "5 hours" every update while still adapting as the true rate shifts over time.
+        private const val PROCESSING_TIME_EMA_ALPHA = 0.15
     }
     
     private val database by lazy {
@@ -782,7 +789,13 @@ class OcrIndexingWorker(
                 val timeElapsed = currentTime - (currentProgress.lastUpdated * 1000)
                 val imagesProcessedSinceLastUpdate = totalProcessedImages - currentProgress.processedImages
                 if (imagesProcessedSinceLastUpdate > 0) {
-                    timeElapsed / imagesProcessedSinceLastUpdate
+                    val instantRateMs = timeElapsed / imagesProcessedSinceLastUpdate
+                    val previousAverage = currentProgress.averageProcessingTimeMs
+                    if (previousAverage > 0) {
+                        (PROCESSING_TIME_EMA_ALPHA * instantRateMs + (1 - PROCESSING_TIME_EMA_ALPHA) * previousAverage).toLong()
+                    } else {
+                        instantRateMs
+                    }
                 } else {
                     currentProgress.averageProcessingTimeMs
                 }
