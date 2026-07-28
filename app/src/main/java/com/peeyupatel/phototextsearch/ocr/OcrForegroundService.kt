@@ -36,6 +36,7 @@ class OcrForegroundService : Service() {
         private const val TAG = "OcrForegroundService"
         private const val NOTIFICATION_ID = 3001
         private const val CHANNEL_ID = "ocr_foreground_service"
+        private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
         
         // Service actions
         const val ACTION_START_LATIN_OCR = "start_latin_ocr"
@@ -343,6 +344,7 @@ class OcrForegroundService : Service() {
             try {
                 database.ocrProgressDao().getProgressFlow().collect { progress ->
                     if (progress != null && progress.isProcessing) {
+                        renewWakeLock()
                         updateServiceNotification()
                     } else if (progress != null && progress.isComplete) {
                         Log.d(TAG, "Latin OCR processing completed")
@@ -366,6 +368,7 @@ class OcrForegroundService : Service() {
             try {
                 database.devanagariOcrProgressDao().getProgressFlow().collect { progress ->
                     if (progress != null && progress.isProcessing) {
+                        renewWakeLock()
                         updateServiceNotification()
                     } else if (progress != null && progress.isComplete) {
                         Log.d(TAG, "Devanagari OCR processing completed")
@@ -450,7 +453,9 @@ class OcrForegroundService : Service() {
     }
 
     /**
-     * Acquire wake lock to prevent device from sleeping during processing
+     * Acquire wake lock to prevent device from sleeping during processing. Non-reference-
+     * counted so renewWakeLock() can call acquire() again later purely to push the timeout
+     * forward, without needing a matching extra release().
      */
     private fun acquireWakeLock() {
         try {
@@ -459,11 +464,26 @@ class OcrForegroundService : Service() {
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "PhotoLex::OcrForegroundService"
             ).apply {
-                acquire(10 * 60 * 1000L) // 10 minutes timeout
+                setReferenceCounted(false)
+                acquire(WAKE_LOCK_TIMEOUT_MS)
             }
             Log.d(TAG, "🔋 Wake lock acquired")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acquire wake lock", e)
+        }
+    }
+
+    /**
+     * Push the wake lock's auto-release timeout forward. Calling acquire(timeout) again on an
+     * already-held, non-reference-counted lock just resets its timer rather than stacking --
+     * called on every progress tick while actively processing so a scan longer than the flat
+     * timeout used to be doesn't silently lose the wake lock partway through.
+     */
+    private fun renewWakeLock() {
+        try {
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to renew wake lock", e)
         }
     }
 
