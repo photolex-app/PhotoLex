@@ -1,6 +1,6 @@
 # Privacy Policy for PhotoLex
 
-_Last updated: 2026-07-26_
+_Last updated: 2026-07-30_
 
 PhotoLex is a photo gallery app that lets you search your photos by the text visible inside them (screenshots, ID cards, documents, signs, etc.). This policy explains, in plain language, what the app does and doesn't do with your data.
 
@@ -16,11 +16,13 @@ PhotoLex does not collect, transmit, sell, or share any of your personal data, p
 
 None of this data ever leaves your device. There is no server operated by us that your photos, extracted text, or search queries are sent to.
 
-## About the on-device text recognition (OCR) and translation
+## About the on-device text recognition (OCR), classification, and translation
 
-PhotoLex uses Google's ML Kit to read text out of your photos and, for the optional cross-language search feature, to translate a short search query between English and Hindi — entirely on your device. The first time each of these features runs, ML Kit may download a small, generic model file (a text-recognition model or a translation model) via Google Play Services — this is a one-time technical download of the *model itself*, not your photos, your extracted text, or any personal data. After that, all recognition, translation, and search happens fully offline, with no further network activity from these features.
+PhotoLex uses Google's ML Kit for several on-device features: reading text out of your photos (text recognition), organizing photos into Smart Albums (entity extraction, to spot dates/amounts/phone numbers in extracted text, and image labeling, to recognize general photo content), deciding whether a photo's text is likely Hindi/Devanagari before running the heavier Devanagari recognizer (language identification), and — for the optional cross-language search feature — translating a short search query between English and Hindi. The first time each of these features runs, ML Kit may download a small, generic model file via Google Play Services — this is a one-time technical download of the *model itself*, not your photos, your extracted text, or any personal data. After that, all recognition, classification, translation, and search happens fully offline, with no further network activity from these features.
 
 **Why this app requests the INTERNET permission**: PhotoLex's own code never uses it to transmit anything — it's declared by the ML Kit libraries themselves, solely so they can perform the one-time model downloads described above. You can confirm this by inspecting the source code: PhotoLex has no server, no API calls, and no code path that sends your photos, extracted text, or search queries anywhere.
+
+PhotoLex also scans photos for barcodes/QR codes (to make ticket and receipt codes searchable) using ML Kit's barcode scanning, which ships fully bundled in the app with no model download or network access at all.
 
 ## Google Lens integration (optional, user-initiated)
 
