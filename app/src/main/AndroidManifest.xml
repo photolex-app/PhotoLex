@@ -131,5 +131,14 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- WorkManager's own foreground-notification service doesn't declare a
+             foregroundServiceType by default; OcrIndexingWorker/DevanagariOcrIndexingWorker
+             call setForeground() with FOREGROUND_SERVICE_TYPE_DATA_SYNC, which the platform
+             rejects unless this override declares a matching type. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>
