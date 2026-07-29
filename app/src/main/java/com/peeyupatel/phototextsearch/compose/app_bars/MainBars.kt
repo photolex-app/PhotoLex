@@ -437,7 +437,8 @@ private fun TextExtractionAnimation(
 fun MainAppBottomBar(
     currentView: MutableState<BottomBarTab>,
     tabs: List<BottomBarTab>,
-    selectedItemsList: SnapshotStateList<MediaStoreData>
+    selectedItemsList: SnapshotStateList<MediaStoreData>,
+    searchBarFocusTrigger: MutableState<Int>
 ) {
     FloatingBottomAppBar {
         Row(
@@ -459,6 +460,13 @@ fun MainAppBottomBar(
                         if (currentView.value != tab) {
                             selectedItemsList.clear()
                             currentView.value = tab
+
+                            // Tapping into the Search tab should land with the search bar
+                            // already focused/keyboard up, ready to type -- not just showing
+                            // the page. SearchPage observes this to call requestFocus().
+                            if (tab == DefaultTabs.TabTypes.search) {
+                                searchBarFocusTrigger.value += 1
+                            }
                         }
                     }
                 )
@@ -483,6 +491,7 @@ fun AnimatedBottomNavigationBar(
     currentView: MutableState<BottomBarTab>,
     tabs: List<BottomBarTab>,
     selectedItemsList: SnapshotStateList<MediaStoreData>,
+    searchBarFocusTrigger: MutableState<Int>,
     isVisible: Boolean = true
 ) {
     // Animate scale with responsive Material Design curves
@@ -522,7 +531,8 @@ fun AnimatedBottomNavigationBar(
         MainAppBottomBar(
             currentView = currentView,
             tabs = tabs,
-            selectedItemsList = selectedItemsList
+            selectedItemsList = selectedItemsList,
+            searchBarFocusTrigger = searchBarFocusTrigger
         )
     }
 }

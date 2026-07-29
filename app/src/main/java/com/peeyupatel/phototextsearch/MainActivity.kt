@@ -338,6 +338,11 @@ class MainActivity : ComponentActivity() {
             stateSaver = BottomBarTabSaver
         ) { mutableStateOf(defaultTab) }
 
+        // Bumped by the bottom nav's Search tab (see BottomBar/MainAppBottomBar) so SearchPage
+        // can request focus on its search bar -- starts at 0 so it doesn't also fire just
+        // because Search happens to be the default landing tab on cold launch.
+        val searchBarFocusTrigger = remember { mutableStateOf(0) }
+
         val context = LocalContext.current
         val showDialog = remember { mutableStateOf(false) }
 
@@ -494,7 +499,7 @@ class MainActivity : ComponentActivity() {
                             window = window
                         )
 
-                        Content(currentView, showDialog, selectedItemsList, multiAlbumViewModel)
+                        Content(currentView, showDialog, selectedItemsList, multiAlbumViewModel, searchBarFocusTrigger)
                     }
 
                     composable<Screens.SinglePhotoView>(
@@ -883,6 +888,7 @@ class MainActivity : ComponentActivity() {
         showDialog: MutableState<Boolean>,
         selectedItemsList: SnapshotStateList<MediaStoreData>,
         multiAlbumViewModel: MultiAlbumViewModel,
+        searchBarFocusTrigger: MutableState<Int>,
     ) {
         val context = LocalContext.current
         val albumsList by mainViewModel.settings.MainGalleryView.getAlbums()
@@ -1002,7 +1008,8 @@ class MainActivity : ComponentActivity() {
                     currentView = currentView,
                     selectedItemsList = selectedItemsList,
                     tabs = tabList,
-                    isBottomBarVisible = isBottomBarVisible
+                    isBottomBarVisible = isBottomBarVisible,
+                    searchBarFocusTrigger = searchBarFocusTrigger
                 )
             },
             containerColor = Color.Transparent,
@@ -1205,7 +1212,8 @@ class MainActivity : ComponentActivity() {
                                     selectedItemsList = selectedItemsList,
                                     currentView = currentView,
                                     onTopBarVisibilityChange = { },
-                                    onBottomBarVisibilityChange = { }
+                                    onBottomBarVisibilityChange = { },
+                                    searchBarFocusTrigger = searchBarFocusTrigger
                                 )
                             }
                         }
@@ -1255,6 +1263,7 @@ class MainActivity : ComponentActivity() {
         currentView: MutableState<BottomBarTab>,
         tabs: List<BottomBarTab>,
         selectedItemsList: SnapshotStateList<MediaStoreData>,
+        searchBarFocusTrigger: MutableState<Int>,
         isBottomBarVisible: Boolean = true
     ) {
         Log.d(TAG, "BottomBar: isBottomBarVisible=$isBottomBarVisible")
@@ -1279,6 +1288,7 @@ class MainActivity : ComponentActivity() {
                     currentView = currentView,
                     tabs = tabs,
                     selectedItemsList = selectedItemsList,
+                    searchBarFocusTrigger = searchBarFocusTrigger,
                     isVisible = isBottomBarVisible
                 )
             } else {

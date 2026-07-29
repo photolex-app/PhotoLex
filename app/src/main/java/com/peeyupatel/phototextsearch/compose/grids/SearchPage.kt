@@ -56,6 +56,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -101,8 +102,20 @@ fun SearchPage(
     selectedItemsList: SnapshotStateList<MediaStoreData>,
     currentView: MutableState<BottomBarTab>,
     onTopBarVisibilityChange: (Boolean) -> Unit = {},
-    onBottomBarVisibilityChange: (Boolean) -> Unit = {}
+    onBottomBarVisibilityChange: (Boolean) -> Unit = {},
+    searchBarFocusTrigger: MutableState<Int> = remember { mutableStateOf(0) }
 ) {
+    // Tapping the bottom nav's Search tab bumps searchBarFocusTrigger (see MainActivity/
+    // MainAppBottomBar); a small delay lets the tab-switch recomposition/animation settle
+    // before requesting focus, same pattern as AnimatableTextField elsewhere in the app.
+    // Starts at 0 so this doesn't also fire on cold launch when Search is the default tab.
+    val searchFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(searchBarFocusTrigger.value) {
+        if (searchBarFocusTrigger.value > 0) {
+            delay(150)
+            searchFocusRequester.requestFocus()
+        }
+    }
     val searchViewModel: SearchViewModel = viewModel(
         factory = SearchViewModelFactory(LocalContext.current, MediaItemSortMode.DateTaken)
     )
@@ -313,7 +326,8 @@ fun SearchPage(
                     },
                     onFilterClick = {
                         showFilterDropdown = !showFilterDropdown
-                    }
+                    },
+                    focusRequester = searchFocusRequester
                 )
             }
 

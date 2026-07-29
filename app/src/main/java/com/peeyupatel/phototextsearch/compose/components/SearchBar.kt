@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -42,7 +44,8 @@ fun SearchBar(
     onSearch: () -> Unit = {},
     onClear: () -> Unit = { query.value = "" },
     onFilterClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     
@@ -117,7 +120,8 @@ fun SearchBar(
             ),
             keyboardOptions = KeyboardOptions(
                 autoCorrectEnabled = false,
-                imeAction = ImeAction.Search
+                imeAction = ImeAction.Search,
+                showKeyboardOnFocus = true
             ),
             keyboardActions = KeyboardActions(
                 onSearch = {
@@ -126,7 +130,12 @@ fun SearchBar(
                 }
             ),
             singleLine = true,
-            maxLines = 1
+            maxLines = 1,
+            modifier = if (focusRequester != null) {
+                Modifier.focusRequester(focusRequester)
+            } else {
+                Modifier
+            }
         )
     }
 }
