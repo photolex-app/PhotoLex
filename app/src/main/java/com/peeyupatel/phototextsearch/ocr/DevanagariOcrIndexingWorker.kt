@@ -1,11 +1,20 @@
 package com.peeyupatel.phototextsearch.ocr
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.peeyupatel.phototextsearch.MainActivity
+import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
@@ -47,6 +56,9 @@ class DevanagariOcrIndexingWorker(
         
         // Default values
         const val DEFAULT_BATCH_SIZE = 50
+
+        private const val FOREGROUND_NOTIFICATION_ID = 3003
+        private const val FOREGROUND_CHANNEL_ID = "ocr_worker_foreground"
     }
 
     private val textExtractor = DevanagariOcrTextExtractor(applicationContext)
@@ -54,6 +66,64 @@ class DevanagariOcrIndexingWorker(
     private val classificationDb by lazy { ClassificationDatabase.getInstance(applicationContext) }
     private val preScanner by lazy { FastTextPreScanner(applicationContext) }
     private val languageGate by lazy { DevanagariLanguageGate(applicationContext) }
+
+    /**
+     * Same missing-setForeground gap and fix as OcrIndexingWorker.ensureForeground() -- see
+     * that comment for the full rationale. Uses the same shared channel ID (harmless to
+     * re-declare) but a distinct notification ID so this worker's own foreground association
+     * doesn't collide with the Latin worker's.
+     */
+    private suspend fun ensureForeground() {
+        try {
+            setForeground(createForegroundInfo())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to promote worker to foreground, continuing anyway: ${e.message}")
+        }
+    }
+
+    private fun createForegroundInfo(): ForegroundInfo {
+        val systemNotificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                "OCR Background Processing",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            systemNotificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to_ocr_settings", true)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            applicationContext,
+            0,
+            intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(applicationContext, FOREGROUND_CHANNEL_ID)
+            .setContentTitle("OCR Processing (Devanagari)")
+            .setContentText("Processing images in background")
+            .setSmallIcon(R.drawable.ocr)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .build()
+
+        return ForegroundInfo(
+            FOREGROUND_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
+    }
 
     /**
      * Reorders unprocessed images so has-text photos (per the shared fast pre-scan, also used
@@ -119,6 +189,8 @@ class DevanagariOcrIndexingWorker(
         Log.d(TAG, "Run attempt: $runAttemptCount")
 
         try {
+            ensureForeground()
+
             Log.d(TAG, "Creating database instance...")
             // Get database instance
             val database = MediaDatabase.getInstance(applicationContext)

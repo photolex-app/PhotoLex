@@ -1,11 +1,19 @@
 package com.peeyupatel.phototextsearch.ocr
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.peeyupatel.phototextsearch.MainActivity
+import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
@@ -60,6 +68,70 @@ class OcrIndexingWorker(
         // parallelism -- unused pool slots during throttled/low-concurrency periods just sit
         // idle, no correctness cost.
         private const val RECOGNIZER_POOL_SIZE = 6
+
+        private const val FOREGROUND_NOTIFICATION_ID = 3002
+        private const val FOREGROUND_CHANNEL_ID = "ocr_worker_foreground"
+    }
+
+    /**
+     * WorkManager enforces its own ~10-minute execution window on a CoroutineWorker
+     * independently of any other foreground service the app runs (OcrForegroundService's own
+     * startForeground() does not exempt this worker) -- without this, "continuous processing"
+     * mode (meant to run for hours across a large gallery) was getting force-cancelled roughly
+     * every 10 minutes, which also broke the Devanagari progress UI (see DevanagariOcrManager).
+     * Calling setForeground() here grants the extended execution time WorkManager reserves for
+     * genuinely foreground work.
+     */
+    private suspend fun ensureForeground() {
+        try {
+            setForeground(createForegroundInfo())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to promote worker to foreground, continuing anyway: ${e.message}")
+        }
+    }
+
+    private fun createForegroundInfo(): ForegroundInfo {
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                "OCR Background Processing",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_to_ocr_settings", true)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            applicationContext,
+            0,
+            intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(applicationContext, FOREGROUND_CHANNEL_ID)
+            .setContentTitle("OCR Processing (Latin)")
+            .setContentText("Processing images in background")
+            .setSmallIcon(R.drawable.ocr)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .build()
+
+        return ForegroundInfo(
+            FOREGROUND_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
     }
 
     private val database by lazy {
@@ -203,6 +275,8 @@ class OcrIndexingWorker(
     
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
+            ensureForeground()
+
             val mediaId = inputData.getLong(KEY_MEDIA_ID, -1L)
             val mediaUri = inputData.getString(KEY_MEDIA_URI)
             val batchSize = inputData.getInt(KEY_BATCH_SIZE, DEFAULT_BATCH_SIZE)
