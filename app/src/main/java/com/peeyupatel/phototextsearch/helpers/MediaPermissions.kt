@@ -57,13 +57,22 @@ fun GetPermissionAndRun(
             }
         }
 
+    // MediaStore.createWriteRequest() throws IllegalArgumentException("Invalid Uri: ...") if any
+    // URI in the list refers to a media row that's no longer valid (e.g. deleted by another app,
+    // or a raw filesystem delete that bypassed MediaStore) -- a real, reproducible crash, not a
+    // hypothetical one. Falls back to onRejected() for that case instead of crashing the app.
     val senderRequest = run {
-        val writeRequestIntent = MediaStore.createWriteRequest(
-            context.contentResolver,
-            uris
-        )
+        try {
+            val writeRequestIntent = MediaStore.createWriteRequest(
+                context.contentResolver,
+                uris
+            )
 
-        IntentSenderRequest.Builder(writeRequestIntent).build()
+            IntentSenderRequest.Builder(writeRequestIntent).build()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create write request for $uris: ${e.message}")
+            null
+        }
     }
 
     LaunchedEffect(shouldRun.value) {
@@ -81,8 +90,10 @@ fun GetPermissionAndRun(
 
                 if (allGranted) {
                     onGranted()
-                } else {
+                } else if (senderRequest != null) {
                     launcher.launch(senderRequest)
+                } else {
+                    onRejected()
                 }
 
                 shouldRun.value = false
