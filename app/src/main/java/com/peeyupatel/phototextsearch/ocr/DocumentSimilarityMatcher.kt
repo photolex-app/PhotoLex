@@ -106,6 +106,27 @@ object DocumentSimilarityMatcher {
         }
     }
 
+    /**
+     * Remove deleted photos from the cached corpus -- without this, a photo removed from
+     * MediaStore (in-app delete, trash-then-permanent-delete, or deleted by another app
+     * entirely) stayed in the term/document-frequency cache for the rest of the process
+     * lifetime, so Find Similar could keep surfacing it as a match after it no longer exists.
+     * No-op if the cache hasn't been built yet, same as onOcrResultUpdated.
+     */
+    suspend fun evict(mediaIds: Collection<Long>) {
+        if (mediaIds.isEmpty()) return
+        cacheMutex.withLock {
+            val terms = cachedTermsByMediaId ?: return
+            for (mediaId in mediaIds) {
+                val oldTerms = terms.remove(mediaId) ?: continue
+                for (term in oldTerms) {
+                    val count = (cachedDocumentFrequency[term] ?: 1) - 1
+                    if (count <= 0) cachedDocumentFrequency.remove(term) else cachedDocumentFrequency[term] = count
+                }
+            }
+        }
+    }
+
     private suspend fun getOrBuildCorpus(database: MediaDatabase): Pair<Map<Long, Set<String>>, Map<String, Int>> {
         cacheMutex.withLock {
             cachedTermsByMediaId?.let { return it to cachedDocumentFrequency }

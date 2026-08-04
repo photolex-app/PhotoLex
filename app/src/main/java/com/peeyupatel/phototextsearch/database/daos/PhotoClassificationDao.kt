@@ -12,6 +12,11 @@ interface PhotoClassificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: PhotoClassificationEntity)
 
+    /** Cleans up classification rows for photos that no longer exist in MediaStore (deleted
+     * outside or inside the app) -- see MediaContentObserver's reconciliation pass. */
+    @Query("DELETE FROM photo_classification WHERE media_id IN (:mediaIds)")
+    suspend fun deleteByMediaIds(mediaIds: List<Long>)
+
     @Query("SELECT * FROM photo_classification WHERE media_id = :mediaId")
     suspend fun getByMediaId(mediaId: Long): PhotoClassificationEntity?
 

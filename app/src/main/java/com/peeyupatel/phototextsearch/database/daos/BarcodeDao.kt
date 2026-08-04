@@ -17,4 +17,9 @@ interface BarcodeDao {
 
     @Query("SELECT media_id FROM photo_barcode WHERE barcode_text LIKE '%' || :query || '%'")
     suspend fun searchMediaIds(query: String): List<Long>
+
+    /** Cleans up barcode rows for photos that no longer exist in MediaStore -- see
+     * MediaContentObserver's reconciliation pass. */
+    @Query("DELETE FROM photo_barcode WHERE media_id IN (:mediaIds)")
+    suspend fun deleteByMediaIds(mediaIds: List<Long>)
 }
