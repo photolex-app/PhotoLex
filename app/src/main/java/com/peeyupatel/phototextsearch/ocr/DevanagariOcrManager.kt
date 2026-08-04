@@ -14,6 +14,8 @@ import androidx.work.workDataOf
 import com.peeyupatel.phototextsearch.database.MediaDatabase
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrProgressEntity
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
+import com.peeyupatel.phototextsearch.datastore.Ocr
+import com.peeyupatel.phototextsearch.datastore.Settings
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import com.peeyupatel.phototextsearch.ocr.MediaContentObserver
@@ -22,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -48,12 +51,17 @@ class DevanagariOcrManager(
 
     private val workManager = WorkManager.getInstance(context)
     private val notificationManager = DevanagariOcrNotificationManager(context)
+    private val settings by lazy { Settings(context, CoroutineScope(Dispatchers.IO)) }
     private var progressMonitorJob: Job? = null
-    
+
+    /** Same user-facing "index even on low battery" toggle as OcrManager -- Devanagari
+     * previously always hardcoded permissive (false) regardless of this setting. */
+    private suspend fun requiresBatteryNotLow(): Boolean = !settings.Ocr.indexOnLowBattery.first()
+
     /**
      * Start OCR processing for a single image
      */
-    fun processImage(mediaItem: MediaStoreData): UUID {
+    suspend fun processImage(mediaItem: MediaStoreData): UUID {
         Log.d(TAG, "Starting Devanagari OCR for image: ${mediaItem.id}")
 
         val inputData = workDataOf(
@@ -63,7 +71,7 @@ class DevanagariOcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<DevanagariOcrIndexingWorker>()
@@ -86,7 +94,7 @@ class DevanagariOcrManager(
     /**
      * Process image from MediaContentObserver
      */
-    fun processImage(imageDetails: MediaContentObserver.ImageDetails): UUID {
+    suspend fun processImage(imageDetails: MediaContentObserver.ImageDetails): UUID {
         Log.d(TAG, "Starting Devanagari OCR for new image: ${imageDetails.id}")
 
         val inputData = workDataOf(
@@ -96,7 +104,7 @@ class DevanagariOcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<DevanagariOcrIndexingWorker>()
@@ -119,17 +127,15 @@ class DevanagariOcrManager(
     /**
      * Start batch OCR processing for multiple images
      */
-    fun processBatch(batchSize: Int = DevanagariOcrIndexingWorker.DEFAULT_BATCH_SIZE): UUID {
+    suspend fun processBatch(batchSize: Int = DevanagariOcrIndexingWorker.DEFAULT_BATCH_SIZE): UUID {
         Log.d(TAG, "Starting Devanagari batch OCR processing with batch size: $batchSize")
 
         // Start foreground service to ensure processing continues in background
         OcrForegroundService.startDevanagariOcr(context)
 
         // Update processing status
-        CoroutineScope(Dispatchers.IO).launch {
-            database.devanagariOcrProgressDao().updateProcessingStatus(true)
-            Log.d(TAG, "Updated Devanagari processing status to true")
-        }
+        database.devanagariOcrProgressDao().updateProcessingStatus(true)
+        Log.d(TAG, "Updated Devanagari processing status to true")
 
         val inputData = workDataOf(
             DevanagariOcrIndexingWorker.KEY_BATCH_SIZE to batchSize,
@@ -138,7 +144,7 @@ class DevanagariOcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()
@@ -204,11 +210,11 @@ class DevanagariOcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(false) // Allow processing even with low battery for better compatibility
+            .setRequiresBatteryNotLow(requiresBatteryNotLow())
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()
-        Log.d(TAG, "Work constraints created (no network, no battery/charging/idle requirements)")
+        Log.d(TAG, "Work constraints created (no network/charging/idle requirements; battery-not-low follows the user's indexOnLowBattery setting)")
 
         val workRequest = OneTimeWorkRequestBuilder<DevanagariOcrIndexingWorker>()
             .setInputData(inputData)

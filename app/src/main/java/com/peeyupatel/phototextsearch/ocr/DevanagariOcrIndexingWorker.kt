@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -407,8 +408,10 @@ class DevanagariOcrIndexingWorker(
             // Bounded concurrency instead of one-at-a-time processing (see matching comment in
             // OcrIndexingWorker.kt) -- also drops the old flat 100ms-per-image delay, which was
             // costing ~28 minutes of pure sleep across a 17k-photo gallery on its own; the
-            // concurrency cap below is the real throttle now.
-            val concurrency = 3
+            // concurrency cap below is the real throttle now. Same core-scaled/thermal-throttled
+            // treatment as the Latin worker (currentOcrConcurrency()) -- this pipeline used to
+            // hardcode 3 regardless of device capability or heat, unlike Latin.
+            val concurrency = currentOcrConcurrency()
             val semaphore = Semaphore(concurrency)
 
             // Records a skipped (not actually OCR'd) image as an empty Devanagari OCR entity and
@@ -531,6 +534,29 @@ class DevanagariOcrIndexingWorker(
                 KEY_ERROR to "Batch processing failed: ${e.message}"
             ))
         }
+    }
+
+    /**
+     * Concurrency for the batch OCR loop: same core-scaled/thermal-throttled policy as
+     * OcrIndexingWorker.currentOcrConcurrency() -- scaled to available CPU cores (leaving one
+     * free for the rest of the system), capped at 6, dropped to 1 under moderate-or-worse
+     * thermal throttling.
+     */
+    private fun currentOcrConcurrency(): Int {
+        val coreBased = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 6)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
+                if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
+                    Log.d(TAG, "Thermal status $thermalStatus is elevated, throttling Devanagari OCR concurrency to 1")
+                    return 1
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read thermal status, using core-based concurrency", e)
+            }
+        }
+        return coreBased
     }
 
     /**
