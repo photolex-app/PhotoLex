@@ -16,6 +16,7 @@ import com.peeyupatel.phototextsearch.database.daos.SecuredMediaItemEntityDao
 import com.peeyupatel.phototextsearch.database.daos.TrashedItemEntityDao
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrProgressEntity
 import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
+import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextFtsEntity
 import com.peeyupatel.phototextsearch.database.entities.FavouritedItemEntity
 import com.peeyupatel.phototextsearch.database.entities.MediaEntity
 import com.peeyupatel.phototextsearch.database.entities.OcrProgressEntity
@@ -26,6 +27,7 @@ import com.peeyupatel.phototextsearch.database.entities.SecuredItemEntity
 import com.peeyupatel.phototextsearch.database.entities.TrashedItemEntity
 import com.peeyupatel.phototextsearch.database.migrations.Migration7to8
 import com.peeyupatel.phototextsearch.database.migrations.Migration8to9
+import com.peeyupatel.phototextsearch.database.migrations.Migration9to10
 
 @Database(entities =
     [
@@ -38,15 +40,17 @@ import com.peeyupatel.phototextsearch.database.migrations.Migration8to9
         DevanagariOcrTextEntity::class,
         DevanagariOcrProgressEntity::class,
         OcrTextFtsEntity::class,
+        DevanagariOcrTextFtsEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 9, // Updated to version 9 to re-enable FTS4 full-text search
+    version = 10, // Updated to version 10 to add FTS4 full-text search for Devanagari OCR text
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         // AutoMigration(from = 4, to = 5) - Manual migration needed
         // AutoMigration(from = 5, to = 6) - Manual migration needed for FTS
         // AutoMigration(from = 7, to = 8) - Manual migration needed for Devanagari OCR
         // AutoMigration(from = 8, to = 9) - Manual migration needed for FTS4 re-enable
+        // AutoMigration(from = 9, to = 10) - Manual migration needed for Devanagari FTS4
     ]
 )
 abstract class MediaDatabase : RoomDatabase() {
@@ -82,7 +86,8 @@ abstract class MediaDatabase : RoomDatabase() {
                     Migration5to6(appContext),
                     Migration6to7(appContext),
                     Migration7to8,
-                    Migration8to9
+                    Migration8to9,
+                    Migration9to10
                 )
                 .enableMultiInstanceInvalidation()
                 .build()

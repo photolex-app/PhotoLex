@@ -29,7 +29,17 @@ interface DevanagariOcrTextDao {
     @Query("SELECT * FROM devanagari_ocr_text WHERE extracted_text LIKE :searchQuery")
     suspend fun searchOcrText(searchQuery: String): List<DevanagariOcrTextEntity>
 
-    // Fallback search for when FTS fails
+    // Primary search path: FTS4 MATCH against the tokenized index instead of a leading-wildcard
+    // LIKE scan -- same pattern as OcrTextDao.searchOcrTextFts for the Latin pipeline.
+    @Query("""
+        SELECT ocr.* FROM devanagari_ocr_text ocr
+        JOIN devanagari_ocr_text_fts fts ON ocr.rowid = fts.rowid
+        WHERE devanagari_ocr_text_fts MATCH :searchQuery
+    """)
+    suspend fun searchOcrTextFts(searchQuery: String): List<DevanagariOcrTextEntity>
+
+    // Fallback search for when FTS query syntax fails (e.g. a raw query string with characters
+    // MATCH can't parse) or as a reference for the pre-FTS behavior.
     @Query("SELECT * FROM devanagari_ocr_text WHERE extracted_text LIKE '%' || :searchQuery || '%'")
     suspend fun searchOcrTextFallback(searchQuery: String): List<DevanagariOcrTextEntity>
     

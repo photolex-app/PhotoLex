@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.MediaDatabase
+import com.peeyupatel.phototextsearch.database.entities.DevanagariOcrTextEntity
 import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -196,10 +197,10 @@ class SimpleOcrService(private val context: Context) {
                     Log.w(TAG, "Latin exact search failed: ${e.message}")
                 }
 
-                // Search Devanagari OCR table
+                // Search Devanagari OCR table -- FTS4 MATCH first (can use the index, unlike a
+                // leading-wildcard LIKE scan), same pattern as Latin's search above.
                 try {
-                    // Strategy 1: Exact phrase search in Devanagari OCR
-                    val devanagariExactResults = database.devanagariOcrTextDao().searchOcrTextFallback(query)
+                    val devanagariExactResults = searchDevanagariFtsOrFallback(ftsPhraseQuery(query), query)
                     results.addAll(devanagariExactResults.map { it.mediaId })
                     Log.d(TAG, "Devanagari exact search found ${devanagariExactResults.size} results")
                 } catch (e: Exception) {
@@ -219,9 +220,9 @@ class SimpleOcrService(private val context: Context) {
                                 Log.w(TAG, "Latin word search failed for '$word': ${e.message}")
                             }
 
-                            // Search Devanagari OCR for individual words
+                            // Search Devanagari OCR for individual words -- FTS prefix match first
                             try {
-                                val devanagariWordResults = database.devanagariOcrTextDao().searchOcrTextFallback(word)
+                                val devanagariWordResults = searchDevanagariFtsOrFallback(ftsPrefixQuery(word), word)
                                 results.addAll(devanagariWordResults.map { it.mediaId })
                             } catch (e: Exception) {
                                 Log.w(TAG, "Devanagari word search failed for '$word': ${e.message}")
@@ -257,7 +258,7 @@ class SimpleOcrService(private val context: Context) {
                         }
 
                         try {
-                            val devanagariTranslatedResults = database.devanagariOcrTextDao().searchOcrTextFallback(translatedQuery)
+                            val devanagariTranslatedResults = searchDevanagariFtsOrFallback(ftsPhraseQuery(translatedQuery), translatedQuery)
                             results.addAll(devanagariTranslatedResults.map { it.mediaId })
                         } catch (e: Exception) {
                             Log.w(TAG, "Devanagari translated search failed: ${e.message}")
@@ -305,6 +306,23 @@ class SimpleOcrService(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Latin FTS search failed for '$ftsQuery', falling back to LIKE: ${e.message}")
             database.ocrTextDao().searchOcrTextFallback(rawQuery)
+        }
+    }
+
+    /**
+     * Same FTS4-first, LIKE-fallback pattern as searchLatinFtsOrFallback, just against the
+     * Devanagari OCR table -- shared by every Devanagari search strategy (exact phrase, word
+     * prefix, translated phrase) below.
+     */
+    private suspend fun searchDevanagariFtsOrFallback(
+        ftsQuery: String,
+        rawQuery: String
+    ): List<DevanagariOcrTextEntity> {
+        return try {
+            database.devanagariOcrTextDao().searchOcrTextFts(ftsQuery)
+        } catch (e: Exception) {
+            Log.w(TAG, "Devanagari FTS search failed for '$ftsQuery', falling back to LIKE: ${e.message}")
+            database.devanagariOcrTextDao().searchOcrTextFallback(rawQuery)
         }
     }
 
