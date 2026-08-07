@@ -70,8 +70,14 @@ enum class ViewProperties(
         operation = ImageFunctions.LoadNormalImage
     ),
     SmartAlbum(
-        emptyText = "No photos in this category yet",
+        emptyText = "No photos in this category yet -- they'll appear here as indexing finds them.",
         emptyIconResId = R.drawable.search,
+        prefix = "",
+        operation = ImageFunctions.LoadNormalImage
+    ),
+    CuratedAlbum(
+        emptyText = "No photos in this album yet",
+        emptyIconResId = R.drawable.albums,
         prefix = "",
         operation = ImageFunctions.LoadNormalImage
     )

@@ -37,6 +37,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
+import com.peeyupatel.phototextsearch.compose.FolderIsEmpty
 import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
@@ -99,13 +100,9 @@ fun SmartAlbumDetailView(
 
         Box(modifier = Modifier.fillMaxSize()) {
             if (groupedMedia.value.isEmpty()) {
-                Text(
-                    text = "No photos in this category yet -- they'll appear here as indexing finds them.",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(32.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                FolderIsEmpty(
+                    emptyText = ViewProperties.SmartAlbum.emptyText,
+                    emptyIconResId = ViewProperties.SmartAlbum.emptyIconResId
                 )
             } else {
                 PhotoGrid(
