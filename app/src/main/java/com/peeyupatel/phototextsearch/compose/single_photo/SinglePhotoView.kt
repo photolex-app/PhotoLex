@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import com.peeyupatel.phototextsearch.ui.theme.Spacing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -567,6 +568,8 @@ private fun TopBar(
 
                 // Google Lens button - only show for images, not videos
                 if (mediaItem.type == MediaType.Image) {
+                    Spacer(modifier = Modifier.width(Spacing.xs))
+
                     IconButton(
                         onClick = {
                             vibratorManager.vibrateShort()
@@ -581,6 +584,8 @@ private fun TopBar(
                                 .size(24.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(Spacing.xs))
 
                     // Text Selection button - dedicated backup solution
                     IconButton(
@@ -600,6 +605,8 @@ private fun TopBar(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(Spacing.xs))
 
                 IconButton(
                     onClick = {

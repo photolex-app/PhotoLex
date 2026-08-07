@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -268,6 +269,7 @@ private fun CuratedAlbumsRowContent(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .heightIn(min = 48.dp)
                     .clickable { onCreateClick() }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
@@ -284,6 +286,7 @@ private fun CuratedAlbumsRowContent(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .heightIn(min = 48.dp)
                     .clickable { onAlbumClick(album) }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {

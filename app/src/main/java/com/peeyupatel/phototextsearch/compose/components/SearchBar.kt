@@ -54,8 +54,8 @@ fun SearchBar(
             .shadow(
                 elevation = 6.dp,
                 shape = RoundedCornerShape(18.dp),
-                spotColor = Color.Gray.copy(alpha = 0.3f),
-                ambientColor = Color.Gray.copy(alpha = 0.2f)
+                spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                ambientColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
             ),
         shape = RoundedCornerShape(18.dp), // Smaller corner radius for more rectangular shape
         color = MaterialTheme.colorScheme.surfaceContainer // Use the theme's surface container color

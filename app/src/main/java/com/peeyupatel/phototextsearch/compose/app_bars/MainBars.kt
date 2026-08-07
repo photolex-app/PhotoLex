@@ -576,7 +576,10 @@ private fun FloatingBottomBarItem(
 
     Column(
         modifier = Modifier
-            .width(70.dp)
+            // Matches the other bottom-bar item slot width (Shared.kt/SelectingBars.kt's
+            // BottomAppBarItem/SelectableBottomAppBarItem, both 64dp) so the bar doesn't
+            // subtly resize when crossfading between normal and selection mode.
+            .width(64.dp)
             .padding(vertical = 4.dp)
             .clickable(
                 indication = null,
