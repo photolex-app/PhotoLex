@@ -13,10 +13,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,12 +32,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
+import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.FolderIsEmpty
 import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
@@ -94,7 +92,7 @@ fun CuratedAlbumDetailView(
                 .padding(8.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(painterResource(id = R.drawable.back_arrow), contentDescription = "Back")
             }
             Text(
                 text = albumName,
@@ -105,7 +103,7 @@ fun CuratedAlbumDetailView(
                 onClick = { showDeleteDialog = true },
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete album")
+                Icon(painterResource(id = R.drawable.delete), contentDescription = "Delete album")
             }
         }
 
@@ -273,7 +271,7 @@ private fun CuratedAlbumsRowContent(
                     .clickable { onCreateClick() }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "New Album")
+                Icon(painterResource(id = R.drawable.add), contentDescription = "New Album")
                 Text(
                     text = "New Album",
                     style = MaterialTheme.typography.labelLarge,

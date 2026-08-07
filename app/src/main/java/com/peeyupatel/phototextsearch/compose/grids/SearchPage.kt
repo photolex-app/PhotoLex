@@ -59,11 +59,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peeyupatel.phototextsearch.LocalNavController
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
+import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.SearchTextField
 import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.compose.components.OcrProgressBar
@@ -362,7 +364,7 @@ fun SearchPage(
                         selected = searchType == "metadata",
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.Search,
+                                painter = painterResource(id = R.drawable.calendar),
                                 contentDescription = "Metadata search",
                                 modifier = Modifier.size(14.dp)
                             )
@@ -386,7 +388,7 @@ fun SearchPage(
                         selected = searchType == "ocr",
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                painter = painterResource(id = R.drawable.text),
                                 contentDescription = "OCR search",
                                 modifier = Modifier.size(14.dp)
                             )
@@ -410,7 +412,7 @@ fun SearchPage(
                         selected = searchType == "combined",
                         leadingIcon = {
                             Icon(
-                                imageVector = Icons.Default.List,
+                                painter = painterResource(id = R.drawable.checklist),
                                 contentDescription = "Combined search",
                                 modifier = Modifier.size(14.dp)
                             )
