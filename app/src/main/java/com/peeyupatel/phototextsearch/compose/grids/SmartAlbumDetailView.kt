@@ -24,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,16 +31,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.peeyupatel.phototextsearch.LocalNavController
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.FolderIsEmpty
 import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
+import com.peeyupatel.phototextsearch.helpers.Screens
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.models.smart_album.SmartAlbumViewModel
 import com.peeyupatel.phototextsearch.models.smart_album.SmartAlbumViewModelFactory
@@ -121,21 +120,17 @@ fun SmartAlbumDetailView(
 
 /**
  * Self-contained "Smart Albums" row shown at the top of the Albums tab -- one card per
- * auto-detected category, with a live count. Manages its own selected-category state and
- * renders the SmartAlbumDetailView as a full-screen Dialog on tap, so this is a single
- * additive composable call from the caller's perspective (no state/wiring needed there).
- * Renders nothing until at least one photo has been categorized, to avoid showing an empty
- * row before background indexing has produced any categories yet.
+ * auto-detected category, with a live count. Navigates to SmartAlbumDetailView as a real
+ * NavHost route on tap, so this is a single additive composable call from the caller's
+ * perspective (no state/wiring needed there). Renders nothing until at least one photo has
+ * been categorized, to avoid showing an empty row before background indexing has produced
+ * any categories yet.
  */
 @Composable
 fun SmartAlbumsRow() {
     val context = LocalContext.current
+    val navController = LocalNavController.current
     var categoryCounts by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
-    // rememberSaveable, not remember -- tapping a photo inside SmartAlbumDetailView's grid
-    // navigates to a SinglePhotoView on top of this screen, which tears down and later
-    // recreates this composition on back-navigation. Plain remember would reset to null on
-    // that recreation, silently closing the album view instead of reappearing.
-    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val dao = ClassificationDatabase.getInstance(context).photoClassificationDao()
@@ -161,7 +156,7 @@ fun SmartAlbumsRow() {
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer)
                     .heightIn(min = 48.dp)
-                    .clickable { selectedCategory = category }
+                    .clickable { navController.navigate(Screens.SmartAlbumView(category)) }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Text(
@@ -175,18 +170,6 @@ fun SmartAlbumsRow() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-    }
-
-    selectedCategory?.let { category ->
-        Dialog(
-            onDismissRequest = { selectedCategory = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            SmartAlbumDetailView(
-                category = category,
-                onBack = { selectedCategory = null }
-            )
         }
     }
 }

@@ -53,6 +53,22 @@ object Screens {
 	    val uri: String,
 	    val dateTaken: Long
 	)
+
+	@Serializable
+	data class SmartAlbumView(
+		val category: String
+	)
+
+	@Serializable
+	data class CuratedAlbumView(
+		val albumId: Long,
+		val albumName: String
+	)
+
+	@Serializable
+	data class FindSimilarView(
+		val sourceMediaId: Long
+	)
 }
 
 

@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,10 +34,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.peeyupatel.phototextsearch.LocalNavController
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.FolderIsEmpty
@@ -46,6 +44,7 @@ import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.database.ClassificationDatabase
 import com.peeyupatel.phototextsearch.database.entities.CuratedAlbumEntity
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
+import com.peeyupatel.phototextsearch.helpers.Screens
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.models.curated_album.CuratedAlbumViewModel
 import com.peeyupatel.phototextsearch.models.curated_album.CuratedAlbumViewModelFactory
@@ -156,20 +155,15 @@ fun CuratedAlbumDetailView(
  * "My Albums" row shown on the Albums tab, alongside SmartAlbumsRow -- one card per
  * user-created Curated Album with a live photo count, plus a "+ New" card that lets the user
  * create an empty album up front (photos get added to it later via Find Similar or a photo
- * picker). Manages its own dialog state, so this is a single additive composable call.
+ * picker). Navigates to CuratedAlbumDetailView as a real NavHost route on tap, so this is a
+ * single additive composable call from the caller's perspective.
  */
 @Composable
 fun CuratedAlbumsRow() {
     val context = LocalContext.current
+    val navController = LocalNavController.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     var albums by remember { mutableStateOf<List<Pair<CuratedAlbumEntity, Int>>>(emptyList()) }
-    // rememberSaveable, not remember -- tapping a photo inside CuratedAlbumDetailView's grid
-    // navigates to a SinglePhotoView on top of this screen, which tears down and later
-    // recreates this composition on back-navigation. Plain remember would reset to null on
-    // that recreation, silently closing the album view instead of reappearing. Track just the
-    // id/name primitives (not the whole CuratedAlbumEntity) since those save/restore directly.
-    var selectedAlbumId by rememberSaveable { mutableStateOf<Long?>(null) }
-    var selectedAlbumName by rememberSaveable { mutableStateOf<String?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var newAlbumName by remember { mutableStateOf("") }
     var refreshTrigger by remember { mutableStateOf(0) }
@@ -182,36 +176,10 @@ fun CuratedAlbumsRow() {
     CuratedAlbumsRowContent(
         albums = albums,
         onAlbumClick = {
-            selectedAlbumId = it.id
-            selectedAlbumName = it.name
+            navController.navigate(Screens.CuratedAlbumView(albumId = it.id, albumName = it.name))
         },
         onCreateClick = { showCreateDialog = true }
     )
-
-    val currentAlbumId = selectedAlbumId
-    val currentAlbumName = selectedAlbumName
-    if (currentAlbumId != null && currentAlbumName != null) {
-        Dialog(
-            onDismissRequest = {
-                selectedAlbumId = null
-                refreshTrigger++
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            CuratedAlbumDetailView(
-                albumId = currentAlbumId,
-                albumName = currentAlbumName,
-                onBack = {
-                    selectedAlbumId = null
-                    refreshTrigger++
-                },
-                onDeleted = {
-                    selectedAlbumId = null
-                    refreshTrigger++
-                }
-            )
-        }
-    }
 
     if (showCreateDialog) {
         AlertDialog(

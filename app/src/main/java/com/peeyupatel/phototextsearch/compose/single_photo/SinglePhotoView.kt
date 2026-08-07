@@ -70,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.peeyupatel.phototextsearch.BuildConfig
+import com.peeyupatel.phototextsearch.LocalNavController
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.app_bars.BottomAppBarItem
@@ -734,29 +735,19 @@ private fun BottomBar(
                     }
 
                     if (currentItem.type == MediaType.Image) {
-                        // rememberSaveable, not remember -- tapping a match inside the Find
-                        // Similar grid navigates to a new SinglePhotoView on top of this one,
-                        // which tears down and later recreates this composition when the user
-                        // navigates back. Plain remember would reset to false on that recreation,
-                        // silently closing the results dialog instead of reappearing.
-                        val showFindSimilar = rememberSaveable { mutableStateOf(false) }
+                        val navController = LocalNavController.current
                         BottomAppBarItem(
                             text = "Similar",
                             iconResId = R.drawable.search,
                             cornerRadius = 32.dp,
-                            action = { showFindSimilar.value = true }
-                        )
-                        if (showFindSimilar.value) {
-                            androidx.compose.ui.window.Dialog(
-                                onDismissRequest = { showFindSimilar.value = false },
-                                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-                            ) {
-                                com.peeyupatel.phototextsearch.compose.grids.FindSimilarResultsView(
-                                    sourceMediaId = currentItem.id,
-                                    onBack = { showFindSimilar.value = false }
+                            action = {
+                                navController.navigate(
+                                    com.peeyupatel.phototextsearch.helpers.Screens.FindSimilarView(
+                                        sourceMediaId = currentItem.id
+                                    )
                                 )
                             }
-                        }
+                        )
                     }
 
                     val showNotImplementedDialog = remember { mutableStateOf(false) }

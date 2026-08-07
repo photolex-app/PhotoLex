@@ -657,6 +657,62 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    composable<Screens.SmartAlbumView> {
+                        enableEdgeToEdge(
+                            navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
+                        )
+                        setupNextScreen(
+                            selectedItemsList,
+                            window
+                        )
+
+                        val screen: Screens.SmartAlbumView = it.toRoute()
+
+                        com.peeyupatel.phototextsearch.compose.grids.SmartAlbumDetailView(
+                            category = screen.category,
+                            onBack = { navControllerLocal.popBackStack() }
+                        )
+                    }
+
+                    composable<Screens.CuratedAlbumView> {
+                        enableEdgeToEdge(
+                            navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
+                        )
+                        setupNextScreen(
+                            selectedItemsList,
+                            window
+                        )
+
+                        val screen: Screens.CuratedAlbumView = it.toRoute()
+
+                        com.peeyupatel.phototextsearch.compose.grids.CuratedAlbumDetailView(
+                            albumId = screen.albumId,
+                            albumName = screen.albumName,
+                            onBack = { navControllerLocal.popBackStack() },
+                            onDeleted = { navControllerLocal.popBackStack() }
+                        )
+                    }
+
+                    composable<Screens.FindSimilarView> {
+                        enableEdgeToEdge(
+                            navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.surfaceContainer.toArgb()),
+                            statusBarStyle = themedStatusBarStyle(scrimColor = MaterialTheme.colorScheme.background)
+                        )
+                        setupNextScreen(
+                            selectedItemsList,
+                            window
+                        )
+
+                        val screen: Screens.FindSimilarView = it.toRoute()
+
+                        com.peeyupatel.phototextsearch.compose.grids.FindSimilarResultsView(
+                            sourceMediaId = screen.sourceMediaId,
+                            onBack = { navControllerLocal.popBackStack() }
+                        )
+                    }
+
                     composable(MultiScreenViewType.AboutAndUpdateView.name) {
                         enableEdgeToEdge(
                             navigationBarStyle = SystemBarStyle.dark(MaterialTheme.colorScheme.background.toArgb()),
