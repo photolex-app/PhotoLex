@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -188,7 +189,7 @@ fun BottomAppBarItem(
         ) {
             Icon(
                 painter = painterResource(id = iconResId),
-                contentDescription = "button",
+                contentDescription = text,
                 tint = contentColor,
                 modifier = Modifier
                     .size(iconSize)
@@ -209,6 +210,9 @@ fun BottomAppBarItem(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(Color.Transparent)
+                // Icon above already carries this same label as its contentDescription;
+                // clearing this Text's semantics avoids TalkBack announcing it twice.
+                .clearAndSetSemantics {}
         )
     }
 }

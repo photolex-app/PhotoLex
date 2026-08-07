@@ -84,6 +84,7 @@ import com.peeyupatel.phototextsearch.mediastore.MediaType
 import com.peeyupatel.phototextsearch.models.multi_album.groupGalleryBy
 import com.peeyupatel.phototextsearch.models.search_page.SearchViewModel
 import com.peeyupatel.phototextsearch.models.search_page.SearchViewModelFactory
+import com.peeyupatel.phototextsearch.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -312,7 +313,7 @@ fun SearchPage(
                     placeholder = placeholder,
                     modifier = Modifier
                         .fillMaxWidth(1f)
-                        .padding(horizontal = 6.dp),
+                        .padding(horizontal = Spacing.lg),
                     onSearch = {
                         if (!showLoadingSpinner) {
                             searchNow = true
@@ -340,7 +341,7 @@ fun SearchPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                        .padding(horizontal = Spacing.lg, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

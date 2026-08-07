@@ -40,6 +40,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -177,6 +182,10 @@ fun MainAppTopBar(
                 IconButton(
                     onClick = {
                         mainViewModel.toggleGridViewMode()
+                    },
+                    modifier = Modifier.semantics {
+                        role = Role.Switch
+                        stateDescription = if (isGridView) "Grid view" else "Date view"
                     },
                 ) {
                     Icon(
@@ -351,7 +360,9 @@ private fun TextExtractionAnimation(
 
     Box(
         modifier = modifier
-            .size(32.dp)
+            // 44dp touch target (guideline minimum) wrapping the smaller 32dp visual glyph below,
+            // so this stays tappable/accessible without changing how big the animation looks.
+            .size(44.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -360,7 +371,12 @@ private fun TextExtractionAnimation(
                     replayTrigger++
                 }
             }
+            .semantics {
+                contentDescription = "Replay text extraction animation"
+            },
+        contentAlignment = Alignment.Center
     ) {
+        Box(modifier = Modifier.size(32.dp)) {
         Canvas(modifier = Modifier.matchParentSize()) {
             val w = size.width
             val h = size.height
@@ -429,6 +445,7 @@ private fun TextExtractionAnimation(
                     }
                 }
             }
+        }
         }
     }
 }
