@@ -21,12 +21,12 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.peeyupatel.phototextsearch"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.peeyupatel.phototextsearch"
         minSdk = 30
-        targetSdk = 35
+        targetSdk = 36
 
         // Versioning policy (standard Android/Play Store practice):
         // - versionCode: plain integer, increment by exactly 1 for every single build
