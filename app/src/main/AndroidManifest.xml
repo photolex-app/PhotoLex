@@ -37,6 +37,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Used once, right after first launch, to offer the user a Play-policy-compliant
+         way to exempt PhotoLex from battery optimization so its one-time full-gallery
+         OCR scan can finish reliably in the background on OEMs (Xiaomi/Oppo/Vivo/etc.)
+         that aggressively kill background apps. Only ever shown once; user can decline. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

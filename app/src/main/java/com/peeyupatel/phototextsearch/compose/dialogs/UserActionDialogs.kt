@@ -1,6 +1,10 @@
 package com.peeyupatel.phototextsearch.compose.dialogs
 
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -618,6 +623,141 @@ fun AlbumAddChoiceDialog(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+/** Returns an OEM-specific hint sentence for manufacturers with known aggressive
+ * background-app-killing behavior on top of stock Android, or null if [manufacturer]
+ * doesn't match a known-aggressive OEM. Intentionally text-only guidance -- OEM settings
+ * screens are unreliable to deep-link into and change often across skins/versions, so we
+ * point the user to the generic App Info screen instead (see [BatteryOptimizationDialog]). */
+fun oemBatteryHintFor(manufacturer: String): String? {
+    val lower = manufacturer.lowercase()
+
+    return when {
+        lower.contains("xiaomi") || lower.contains("redmi") ->
+            "On Xiaomi/Redmi phones, also check Settings > Apps > PhotoLex > Battery saver > No restrictions, and enable Autostart."
+
+        lower.contains("oppo") || lower.contains("realme") ->
+            "On Oppo/Realme phones, also check Settings > Battery > PhotoLex > Allow background activity, and enable Auto-launch in App Management."
+
+        lower.contains("vivo") ->
+            "On Vivo phones, check i Manager > App Manager > Autostart Manager and enable PhotoLex."
+
+        lower.contains("huawei") || lower.contains("honor") ->
+            "On Huawei/Honor phones, check Settings > Apps > PhotoLex > Battery > App launch, and set to Manage manually with all three toggles on."
+
+        lower.contains("samsung") ->
+            "On Samsung phones, check Settings > Apps > PhotoLex > Battery > Unrestricted."
+
+        else -> null
+    }
+}
+
+/**
+ * One-time dialog shown right after runtime permissions are granted (and only if the app
+ * isn't already exempt from battery optimization) asking the user to allow PhotoLex to run
+ * unrestricted so its one-time full-gallery OCR scan can finish reliably in the background.
+ *
+ * Many OEM Android skins (Xiaomi/MIUI, Oppo/ColorOS, Vivo, Huawei/EMUI, Samsung) kill
+ * background foreground-services more aggressively than stock Android unless the user
+ * manually whitelists the app, so an OEM-specific hint is shown as a secondary tip when
+ * [manufacturer] matches a known-aggressive OEM -- see [oemBatteryHintFor].
+ *
+ * This dialog never blocks or delays the OCR scan -- it is purely an optional, dismissible
+ * ask, and [onDismiss] is invoked (marking the prompt as shown, never to be shown again)
+ * regardless of which button the user taps.
+ */
+@Composable
+fun BatteryOptimizationDialog(
+    manufacturer: String = Build.MANUFACTURER,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val oemHint = remember(manufacturer) { oemBatteryHintFor(manufacturer) }
+
+    LavenderDialogBase(
+        modifier = Modifier
+            .animateContentSize(),
+        onDismiss = onDismiss
+    ) {
+        Text(
+            text = "Keep your first scan fast",
+            fontSize = TextUnit(18f, TextUnitType.Sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.wrapContentSize()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "PhotoLex needs to scan your whole gallery once to make search work. Some phones aggressively pause background apps, which can make this take much longer than it should. Allowing PhotoLex to run without battery restrictions — just for this one-time scan — helps it finish quickly.",
+            fontSize = TextUnit(14f, TextUnitType.Sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.wrapContentSize()
+        )
+
+        if (oemHint != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = oemHint,
+                fontSize = TextUnit(13f, TextUnitType.Sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                modifier = Modifier.wrapContentSize()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        FullWidthDialogButton(
+            text = "Allow",
+            color = MaterialTheme.colorScheme.primary,
+            textColor = MaterialTheme.colorScheme.onPrimary,
+            position = RowPosition.Top
+        ) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + context.packageName)
+                )
+                context.startActivity(intent)
+            } catch (_: Throwable) {
+                // Some OEMs/ROMs don't implement this action; fall back to nothing, the user
+                // can still use the "Open App Settings" button below.
+            }
+
+            onDismiss()
+        }
+
+        FullWidthDialogButton(
+            text = "Open App Settings",
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            textColor = MaterialTheme.colorScheme.onSurface,
+            position = RowPosition.Middle
+        ) {
+            try {
+                val intent = Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + context.packageName)
+                )
+                context.startActivity(intent)
+            } catch (_: Throwable) {
+                // Not expected to fail, but never let this dialog crash the app.
+            }
+
+            onDismiss()
+        }
+
+        FullWidthDialogButton(
+            text = "Not now",
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            textColor = MaterialTheme.colorScheme.onSurface,
+            position = RowPosition.Bottom
+        ) {
+            onDismiss()
+        }
     }
 }
 

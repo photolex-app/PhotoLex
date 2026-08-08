@@ -115,6 +115,7 @@ import com.peeyupatel.phototextsearch.compose.utils.DynamicStatusBarController
 import com.peeyupatel.phototextsearch.compose.utils.ScrollVisibilityState
 import com.peeyupatel.phototextsearch.compose.utils.handleScrollVisibilityChange
 import com.peeyupatel.phototextsearch.compose.utils.handleBottomBarScrollVisibilityChange
+import com.peeyupatel.phototextsearch.compose.dialogs.BatteryOptimizationDialog
 import com.peeyupatel.phototextsearch.compose.dialogs.MainAppDialog
 import com.peeyupatel.phototextsearch.compose.grids.AlbumsGridView
 import com.peeyupatel.phototextsearch.compose.grids.FavouritesGridView
@@ -352,6 +353,36 @@ class MainActivity : ComponentActivity() {
             // Small delay to ensure permission state is updated after user grants permissions
             kotlinx.coroutines.delay(500)
             ensureOcrSystemInitialized()
+        }
+
+        // One-time battery-optimization exemption prompt -- shown right alongside the very
+        // first OCR scan kicking off (see LaunchedEffect above), but intentionally decoupled
+        // from it: this only decides whether to *show a dialog*, it never gates or delays
+        // ensureOcrSystemInitialized()/startContinuousProcessing above.
+        val showBatteryOptimizationDialog = remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            val alreadyShown = mainViewModel.settings.Ocr.hasShownBatteryOptimizationPrompt.first()
+            if (!alreadyShown) {
+                val powerManager = context.getSystemService(android.os.PowerManager::class.java)
+                val isIgnoringOptimizations =
+                    powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+
+                if (isIgnoringOptimizations) {
+                    // Already exempt (e.g. user granted it manually before) -- nothing to ask.
+                    mainViewModel.settings.Ocr.setHasShownBatteryOptimizationPrompt(true)
+                } else {
+                    showBatteryOptimizationDialog.value = true
+                }
+            }
+        }
+
+        if (showBatteryOptimizationDialog.value) {
+            BatteryOptimizationDialog(
+                onDismiss = {
+                    showBatteryOptimizationDialog.value = false
+                    mainViewModel.settings.Ocr.setHasShownBatteryOptimizationPrompt(true)
+                }
+            )
         }
 
         // Handle notification navigation intents

@@ -563,6 +563,7 @@ class DevanagariOcrIndexingWorker(
         }
     }
 
+    /**
      * Reads the current battery percentage (0-100), or null if unavailable. Used as the hard
      * safety floor for the backlog-clearing path -- see CRITICAL_BATTERY_PERCENT.
      */

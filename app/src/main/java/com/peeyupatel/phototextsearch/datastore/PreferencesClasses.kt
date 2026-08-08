@@ -766,6 +766,7 @@ class SettingsOcrImpl(
     private val latinOcrEnabledKey = booleanPreferencesKey("latin_ocr_enabled")
     private val devanagariOcrEnabledKey = booleanPreferencesKey("devanagari_ocr_enabled")
     private val indexOnLowBatteryKey = booleanPreferencesKey("index_on_low_battery")
+    private val hasShownBatteryOptimizationPromptKey = booleanPreferencesKey("has_shown_battery_optimization_prompt")
 
     val latinOcrEnabled: Flow<Boolean> = context.datastore.data.map { preferences ->
         preferences[latinOcrEnabledKey] ?: true // Default to enabled for Latin OCR
@@ -780,6 +781,13 @@ class SettingsOcrImpl(
      * user-facing choice, it isn't a behavior change by default. */
     val indexOnLowBattery: Flow<Boolean> = context.datastore.data.map { preferences ->
         preferences[indexOnLowBatteryKey] ?: true
+    }
+
+    /** Whether the one-time "exempt PhotoLex from battery optimization" prompt has already
+     * been shown to the user (regardless of whether they allowed it, skipped it, or opened
+     * app settings instead). Used to make sure it is shown at most once, ever. */
+    val hasShownBatteryOptimizationPrompt: Flow<Boolean> = context.datastore.data.map { preferences ->
+        preferences[hasShownBatteryOptimizationPromptKey] ?: false
     }
 
     fun setLatinOcrEnabled(enabled: Boolean) = viewModelScope.launch {
@@ -797,6 +805,12 @@ class SettingsOcrImpl(
     fun setIndexOnLowBattery(enabled: Boolean) = viewModelScope.launch {
         context.datastore.edit { preferences ->
             preferences[indexOnLowBatteryKey] = enabled
+        }
+    }
+
+    fun setHasShownBatteryOptimizationPrompt(shown: Boolean) = viewModelScope.launch {
+        context.datastore.edit { preferences ->
+            preferences[hasShownBatteryOptimizationPromptKey] = shown
         }
     }
 }
