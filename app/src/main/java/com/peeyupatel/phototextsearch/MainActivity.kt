@@ -367,8 +367,15 @@ class MainActivity : ComponentActivity() {
                 val isIgnoringOptimizations =
                     powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
 
-                if (isIgnoringOptimizations) {
-                    // Already exempt (e.g. user granted it manually before) -- nothing to ask.
+                // Doze-whitelist exemption and an OEM's own separate "auto-start"/"allow
+                // background activity" toggle are two independent permission systems -- e.g.
+                // this device already had standard doze-whitelisting granted (persists across
+                // reinstalls on this ROM) yet OCR still got killed mid-scan by the OEM's own
+                // background-app manager, confirmed live 2026-08-08. Only skip the dialog
+                // entirely when NEITHER applies: already doze-exempt AND no known OEM toggle
+                // to offer.
+                val hasOemToggle = com.peeyupatel.phototextsearch.helpers.hasKnownOemAutoStartSettings()
+                if (isIgnoringOptimizations && !hasOemToggle) {
                     mainViewModel.settings.Ocr.setHasShownBatteryOptimizationPrompt(true)
                 } else {
                     showBatteryOptimizationDialog.value = true

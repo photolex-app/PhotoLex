@@ -675,6 +675,9 @@ fun BatteryOptimizationDialog(
 ) {
     val context = LocalContext.current
     val oemHint = remember(manufacturer) { oemBatteryHintFor(manufacturer) }
+    val hasOemSettings = remember(manufacturer) {
+        com.peeyupatel.phototextsearch.helpers.hasKnownOemAutoStartSettings(manufacturer)
+    }
 
     LavenderDialogBase(
         modifier = Modifier
@@ -729,6 +732,30 @@ fun BatteryOptimizationDialog(
             }
 
             onDismiss()
+        }
+
+        if (hasOemSettings) {
+            FullWidthDialogButton(
+                text = "Fix background restrictions",
+                color = MaterialTheme.colorScheme.primary,
+                textColor = MaterialTheme.colorScheme.onPrimary,
+                position = RowPosition.Middle
+            ) {
+                val opened = com.peeyupatel.phototextsearch.helpers.tryOpenOemAutoStartSettings(context, manufacturer)
+                if (!opened) {
+                    try {
+                        val intent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:" + context.packageName)
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Throwable) {
+                        // Never let this dialog crash the app.
+                    }
+                }
+
+                onDismiss()
+            }
         }
 
         FullWidthDialogButton(
