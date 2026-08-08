@@ -21,7 +21,6 @@ import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntit
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import android.os.Build
-import android.os.PowerManager
 import android.provider.MediaStore
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
@@ -274,6 +273,7 @@ class OcrIndexingWorker(
     }
     
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        OcrConcurrencyCoordinator.markActive(OcrPipeline.LATIN)
         try {
             ensureForeground()
 
@@ -303,6 +303,7 @@ class OcrIndexingWorker(
         } finally {
             ocrExtractorPool.forEach { it.cleanup() }
             preScanner.cleanup()
+            OcrConcurrencyCoordinator.markInactive(OcrPipeline.LATIN)
         }
     }
     
@@ -700,27 +701,12 @@ class OcrIndexingWorker(
     }
 
     /**
-     * Concurrency for the batch OCR loop: scaled to available CPU cores (leaving one free for
-     * the rest of the system), capped at 6 so this never overwhelms a many-core device, and
-     * dropped to 1 when the device reports moderate-or-worse thermal throttling so OCR doesn't
-     * keep pushing an already-hot device at full tilt for reduced per-op efficiency.
+     * Concurrency for the batch OCR loop: delegates to OcrConcurrencyCoordinator, which shares
+     * the core-scaled/thermal-throttled budget with the Devanagari worker when both are running
+     * at once instead of each independently claiming the full cap (see coordinator kdoc).
      */
-    private fun currentOcrConcurrency(): Int {
-        val coreBased = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 6)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
-                if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
-                    Log.d(TAG, "Thermal status $thermalStatus is elevated, throttling OCR concurrency to 1")
-                    return 1
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to read thermal status, using core-based concurrency", e)
-            }
-        }
-        return coreBased
-    }
+    private fun currentOcrConcurrency(): Int =
+        OcrConcurrencyCoordinator.concurrencyFor(OcrPipeline.LATIN, applicationContext)
 
     /**
      * Get unprocessed images from MediaStore

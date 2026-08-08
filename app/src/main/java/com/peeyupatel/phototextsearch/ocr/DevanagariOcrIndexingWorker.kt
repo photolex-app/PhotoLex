@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -189,6 +188,7 @@ class DevanagariOcrIndexingWorker(
         Log.d(TAG, "Worker ID: $id")
         Log.d(TAG, "Run attempt: $runAttemptCount")
 
+        OcrConcurrencyCoordinator.markActive(OcrPipeline.DEVANAGARI)
         try {
             ensureForeground()
 
@@ -239,6 +239,7 @@ class DevanagariOcrIndexingWorker(
             textExtractor.cleanup()
             preScanner.cleanup()
             languageGate.cleanup()
+            OcrConcurrencyCoordinator.markInactive(OcrPipeline.DEVANAGARI)
             Log.d(TAG, "🏁 === DEVANAGARI OCR WORKER FINISHED ===")
         }
     }
@@ -399,8 +400,16 @@ class DevanagariOcrIndexingWorker(
             // full-resolution OCR call on confidently-no-text photos. Unknown/not-yet-scanned
             // (null, e.g. the unprioritized remainder) still gets full OCR -- only skips on a
             // confident answer, never guesses.
-            val hasTextByMediaId = classificationDb.photoClassificationDao()
-                .getByMediaIds(imagesToProcess.map { it.id })
+            //
+            // Chunked (not one IN-clause query for all of imagesToProcess) -- when processAll is
+            // true, imagesToProcess is the *entire* remaining backlog, which can be many
+            // thousands of media IDs on a large gallery. A single query with that many bound
+            // parameters sat well past SQLite's default ~999-variable limit and stalled the
+            // worker indefinitely on every restart with a large backlog remaining (observed:
+            // 13,896 remaining images, worker never got past this line). 900 stays safely under
+            // that limit regardless of device/SQLite build.
+            val hasTextByMediaId = imagesToProcess.map { it.id }.chunked(900)
+                .flatMap { classificationDb.photoClassificationDao().getByMediaIds(it) }
                 .associateBy({ it.mediaId }, { it.hasText })
 
             Log.d(TAG, "Processing ${imagesToProcess.size} images for Devanagari OCR")
@@ -537,27 +546,12 @@ class DevanagariOcrIndexingWorker(
     }
 
     /**
-     * Concurrency for the batch OCR loop: same core-scaled/thermal-throttled policy as
-     * OcrIndexingWorker.currentOcrConcurrency() -- scaled to available CPU cores (leaving one
-     * free for the rest of the system), capped at 6, dropped to 1 under moderate-or-worse
-     * thermal throttling.
+     * Concurrency for the batch OCR loop: delegates to OcrConcurrencyCoordinator, which shares
+     * the core-scaled/thermal-throttled budget with the Latin worker when both are running at
+     * once instead of each independently claiming the full cap (see coordinator kdoc).
      */
-    private fun currentOcrConcurrency(): Int {
-        val coreBased = (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 6)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
-                val thermalStatus = powerManager?.currentThermalStatus ?: PowerManager.THERMAL_STATUS_NONE
-                if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
-                    Log.d(TAG, "Thermal status $thermalStatus is elevated, throttling Devanagari OCR concurrency to 1")
-                    return 1
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to read thermal status, using core-based concurrency", e)
-            }
-        }
-        return coreBased
-    }
+    private fun currentOcrConcurrency(): Int =
+        OcrConcurrencyCoordinator.concurrencyFor(OcrPipeline.DEVANAGARI, applicationContext)
 
     /**
      * Get all images from MediaStore

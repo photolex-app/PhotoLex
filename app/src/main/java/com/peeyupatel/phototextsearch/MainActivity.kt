@@ -1468,8 +1468,17 @@ class MainActivity : ComponentActivity() {
                     val processedCount = applicationDatabase.devanagariOcrProgressDao().getProcessedCount() ?: 0
                     Log.d(TAG, "Devanagari OCR - Already processed: $processedCount images")
 
-                    // Start automatic Devanagari OCR processing if needed
-                    if (processedCount < totalImages) {
+                    // Start automatic Devanagari OCR processing if needed -- guarded on
+                    // isProcessing/isPaused (same condition the "resume logic" block below
+                    // already uses) so this doesn't unconditionally start a second, redundant
+                    // continuous-processing run alongside that block's own resume check. Without
+                    // this, both blocks could call startContinuousProcessing() on the same app
+                    // launch, and the resulting two near-simultaneous full-MediaStore-table
+                    // queries (getAllImages() fetches all photos, unlike Latin's bounded
+                    // candidate-pool lookup) were observed to contend with each other badly
+                    // enough that neither worker made progress for minutes.
+                    val alreadyRunning = devanagariProgress?.isProcessing == true || devanagariProgress?.isPaused == true
+                    if (processedCount < totalImages && !alreadyRunning) {
                         Log.d(TAG, "Starting automatic Devanagari OCR processing for ${totalImages - processedCount} remaining images")
 
                         // Ensure progress status is properly set before starting
@@ -1477,6 +1486,8 @@ class MainActivity : ComponentActivity() {
                         applicationDatabase.devanagariOcrProgressDao().updatePausedStatus(false)
 
                         devanagariOcrManager.startContinuousProcessing(batchSize = 50)
+                    } else if (alreadyRunning) {
+                        Log.d(TAG, "Devanagari OCR already processing or paused, skipping duplicate start (resume logic below will handle it)")
                     } else {
                         Log.d(TAG, "All Devanagari OCR images already processed")
                         // Mark as complete if all images are processed
