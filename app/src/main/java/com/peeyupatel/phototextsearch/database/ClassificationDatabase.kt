@@ -112,5 +112,17 @@ abstract class ClassificationDatabase : RoomDatabase() {
                     .build().also { instance = it }
             }
         }
+
+        /**
+         * Closes the current singleton connection and clears it, so the next getInstance() call
+         * builds a fresh one. See MediaDatabase.closeAndReset() for why this is needed before an
+         * index restore replaces the underlying .db file.
+         */
+        fun closeAndReset() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
     }
 }

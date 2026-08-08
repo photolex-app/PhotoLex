@@ -74,6 +74,19 @@ abstract class MediaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Closes the current singleton connection and clears it, so the next getInstance() call
+         * builds a fresh one. Needed before swapping the underlying .db file out from under Room
+         * (index restore) -- Room/SQLite must not have this database open while its file on disk
+         * is replaced.
+         */
+        fun closeAndReset() {
+            synchronized(this) {
+                instance?.close()
+                instance = null
+            }
+        }
+
         private fun build(appContext: Context): MediaDatabase {
             return Room.databaseBuilder(
                 appContext,

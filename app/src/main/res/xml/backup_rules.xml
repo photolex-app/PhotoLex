@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older that API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Legacy Auto Backup config, used on API <= 31. Explicitly including the OCR index databases
+   here is a free, best effort safety net alongside the app's own manual Backup/Restore Index
+   feature (Settings, Data and Backup). Auto Backup only runs opportunistically (wifi, idle,
+   signed into a Google account), isn't guaranteed to run before an uninstall, and is capped at
+   25MB, so it's a complement to the manual backup, not a replacement for it.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <include domain="database" path="media-database" />
+    <include domain="database" path="media-database-wal" />
+    <include domain="database" path="media-database-shm" />
+    <include domain="database" path="photo-classification-database" />
+    <include domain="database" path="photo-classification-database-wal" />
+    <include domain="database" path="photo-classification-database-shm" />
 </full-backup-content>

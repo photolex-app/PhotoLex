@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Auto Backup config for API 31+ (cloud backup / device-to-device transfer). Explicitly
+   including the OCR index databases here is a free, best effort safety net alongside the app's
+   own manual Backup/Restore Index feature (Settings, Data and Backup). See backup_rules.xml for
+   why this isn't a substitute for the manual backup.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <include domain="database" path="media-database" />
+        <include domain="database" path="media-database-wal" />
+        <include domain="database" path="media-database-shm" />
+        <include domain="database" path="photo-classification-database" />
+        <include domain="database" path="photo-classification-database-wal" />
+        <include domain="database" path="photo-classification-database-shm" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <include domain="database" path="media-database" />
+        <include domain="database" path="media-database-wal" />
+        <include domain="database" path="media-database-shm" />
+        <include domain="database" path="photo-classification-database" />
+        <include domain="database" path="photo-classification-database-wal" />
+        <include domain="database" path="photo-classification-database-shm" />
     </device-transfer>
-    -->
 </data-extraction-rules>

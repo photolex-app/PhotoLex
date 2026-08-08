@@ -1,7 +1,10 @@
 package com.peeyupatel.phototextsearch.compose.settings
 
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -12,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,9 +37,11 @@ import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.PreferencesRow
 import com.peeyupatel.phototextsearch.compose.PreferencesSeparatorText
+import com.peeyupatel.phototextsearch.compose.dialogs.ConfirmationDialogWithBody
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
 import com.peeyupatel.phototextsearch.datastore.AlbumsList
 import com.peeyupatel.phototextsearch.helpers.DataAndBackupHelper
+import com.peeyupatel.phototextsearch.helpers.IndexBackupHelper
 import com.peeyupatel.phototextsearch.helpers.RowPosition
 import com.peeyupatel.phototextsearch.helpers.relativePath
 import com.peeyupatel.phototextsearch.mediastore.LAVENDER_FILE_PROVIDER_AUTHORITY
@@ -257,6 +263,106 @@ fun DataAndBackupPage() {
                         context.startActivity(intent)
                         isLoading.value = false
                     }
+                }
+            }
+
+            item {
+                PreferencesSeparatorText(
+                    text = "OCR Index"
+                )
+            }
+
+            item {
+                val context = LocalContext.current
+                val isLoading = remember { mutableStateOf(false) }
+                val showRestoreConfirmation = remember { mutableStateOf(false) }
+                val pendingRestoreUri = remember { mutableStateOf<Uri?>(null) }
+
+                val backupLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/zip")
+                ) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    mainViewModel.launch(Dispatchers.IO) {
+                        isLoading.value = true
+                        LavenderSnackbarController.pushEvent(
+                            LavenderSnackbarEvents.LoadingEvent(
+                                message = "Backing up index...",
+                                iconResId = R.drawable.folder_export,
+                                isLoading = isLoading
+                            )
+                        )
+
+                        val success = IndexBackupHelper.backupIndex(context, uri)
+
+                        isLoading.value = false
+                        LavenderSnackbarController.pushEvent(
+                            LavenderSnackbarEvents.MessageEvent(
+                                message = if (success) "Index backed up successfully" else "Index backup failed",
+                                iconResId = if (success) R.drawable.check_item else R.drawable.error_2,
+                                duration = SnackbarDuration.Short
+                            )
+                        )
+                    }
+                }
+
+                val restoreLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    if (uri == null) return@rememberLauncherForActivityResult
+                    pendingRestoreUri.value = uri
+                    showRestoreConfirmation.value = true
+                }
+
+                if (showRestoreConfirmation.value) {
+                    ConfirmationDialogWithBody(
+                        showDialog = showRestoreConfirmation,
+                        dialogTitle = "Restore index?",
+                        dialogBody = "This replaces your current search index with the one in this backup. Restart the app afterwards for it to take effect.",
+                        confirmButtonLabel = "Restore"
+                    ) {
+                        val uri = pendingRestoreUri.value ?: return@ConfirmationDialogWithBody
+                        mainViewModel.launch(Dispatchers.IO) {
+                            isLoading.value = true
+                            LavenderSnackbarController.pushEvent(
+                                LavenderSnackbarEvents.LoadingEvent(
+                                    message = "Restoring index...",
+                                    iconResId = R.drawable.folder_export,
+                                    isLoading = isLoading
+                                )
+                            )
+
+                            val success = IndexBackupHelper.restoreIndex(context, uri)
+
+                            isLoading.value = false
+                            LavenderSnackbarController.pushEvent(
+                                LavenderSnackbarEvents.MessageEvent(
+                                    message = if (success) "Index restored -- please restart the app" else "Index restore failed",
+                                    iconResId = if (success) R.drawable.check_item else R.drawable.error_2,
+                                    duration = SnackbarDuration.Long
+                                )
+                            )
+                        }
+                    }
+                }
+
+                PreferencesRow(
+                    title = "Backup Index",
+                    iconResID = R.drawable.folder_export,
+                    summary = "Saves your OCR search index to a file you choose -- keep it somewhere safe if you plan to uninstall the app, since the index otherwise doesn't survive an uninstall",
+                    position = RowPosition.Middle,
+                    showBackground = false
+                ) {
+                    backupLauncher.launch("photolex_index_backup.zip")
+                }
+
+                PreferencesRow(
+                    title = "Restore Index",
+                    iconResID = R.drawable.folder_zip,
+                    summary = "Restores a previously backed-up index -- after restoring, only new photos need to be re-scanned",
+                    position = RowPosition.Middle,
+                    showBackground = false
+                ) {
+                    restoreLauncher.launch(arrayOf("application/zip"))
                 }
             }
         }
