@@ -466,8 +466,24 @@ fun SearchPage(
             }
         }
 
-        LaunchedEffect(searchedForText.value, originalGroupedMedia.value, searchType) {
-            println("SEARCH PARAMETERS CHANGED - Query: '${searchedForText.value}', Type: $searchType")
+        // Triggered by searchNow (Enter/IME search action, tapping a filter chip, or clearing
+        // the field via the X button -- see SearchBar's onSearch/onClear and the filter chip
+        // onClick handlers below, all of which flip searchNow) rather than by raw text changes.
+        // Previously this fired a full search on every single keystroke with no cancellation of
+        // the previous one (each ran in a separate, never-cancelled coroutineScope.launch{}),
+        // so whichever keystroke's search happened to *finish* last -- not the most recently
+        // *typed* one -- won and overwrote groupedMedia.value. Observed live: typing "chandrika"
+        // showed a stale partial-word result because the in-flight search for an earlier
+        // keystroke ("chan") finished after the real "chandrika" search. Requiring an explicit
+        // submit means there's normally only ever one search in flight at a time; running it
+        // inline in this LaunchedEffect (not a separate launch{}) means Compose's own
+        // cancellation would still correctly abort a stale one in the rare case two submits
+        // do overlap (e.g. a slow search still running when the filter type is changed).
+        LaunchedEffect(searchNow, originalGroupedMedia.value) {
+            if (!searchNow) return@LaunchedEffect
+
+            println("SEARCH TRIGGERED - Query: '${searchedForText.value}', Type: $searchType")
+
             if (searchedForText.value == "") {
                 // Get the current grid view mode from MainViewModel
                 val isGridView = mainViewModel.isGridViewMode.value
@@ -479,18 +495,19 @@ fun SearchPage(
                     originalGroupedMedia.value
                 }
                 hideLoadingSpinner = true
+                searchNow = false
                 return@LaunchedEffect
             }
 
             hideLoadingSpinner = false
 
-            coroutineScope.launch {
-                when (searchType) {
-                    "metadata" -> performMetadataSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia) { hideLoadingSpinner = it }
-                    "ocr" -> performOcrSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia, searchViewModel) { hideLoadingSpinner = it }
-                    "combined" -> performCombinedSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia, searchViewModel) { hideLoadingSpinner = it }
-                }
+            when (searchType) {
+                "metadata" -> performMetadataSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia) { hideLoadingSpinner = it }
+                "ocr" -> performOcrSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia, searchViewModel) { hideLoadingSpinner = it }
+                "combined" -> performCombinedSearch(searchedForText.value, originalGroupedMedia.value, groupedMedia, searchViewModel) { hideLoadingSpinner = it }
             }
+
+            searchNow = false
         }
 
 
@@ -763,6 +780,11 @@ private suspend fun performOcrSearch(
         groupedMedia.value = groupGalleryBy(filteredMedia, MediaItemSortMode.DateTaken, isGridView)
 
     } catch (e: Exception) {
+        // Rethrow cancellation instead of swallowing it -- this runs inside the search
+        // LaunchedEffect's own coroutine, so a superseded (stale) search must actually stop
+        // here rather than being treated like an ordinary error and completing anyway, which
+        // would let it still overwrite groupedMedia.value with a stale result.
+        if (e is kotlinx.coroutines.CancellationException) throw e
         // On error, show empty results
         groupedMedia.value = emptyList()
     } finally {
@@ -802,6 +824,8 @@ private suspend fun performCombinedSearch(
         groupedMedia.value = groupGalleryBy(combinedResults, MediaItemSortMode.DateTaken, isGridView)
 
     } catch (e: Exception) {
+        // See performOcrSearch's matching comment -- must not swallow cancellation here.
+        if (e is kotlinx.coroutines.CancellationException) throw e
         // On error, show empty results
         groupedMedia.value = emptyList()
     } finally {

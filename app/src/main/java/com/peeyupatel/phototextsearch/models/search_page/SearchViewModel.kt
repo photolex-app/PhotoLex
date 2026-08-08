@@ -84,6 +84,11 @@ class SearchViewModel(context: Context, sortBy: MediaItemSortMode) : ViewModel()
 
             mediaIds
         } catch (e: Exception) {
+            // Must not swallow cancellation -- a superseded (stale) search needs to actually
+            // stop instead of completing and reporting empty results, which would still
+            // overwrite the caller's display state with a stale value. See SearchPage.kt's
+            // performOcrSearch for the full explanation of the race this was causing.
+            if (e is kotlinx.coroutines.CancellationException) throw e
             _ocrSearchResults.value = emptyList()
             emptyList()
         }
