@@ -122,6 +122,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
     buildFeatures {
         compose = true
         viewBinding = true
@@ -253,6 +259,14 @@ dependencies {
     annotationProcessor("androidx.room:room-compiler:$roomVersion")
 
 	testImplementation("junit:junit:4.13.2")
+    // Search-correctness regression suite: real Room/SQLite behavior via Robolectric (fast,
+    // pure-JVM, no emulator needed) instead of mocking the database layer, since the bugs
+    // worth catching here (FTS4 index going out of sync, MATCH query syntax edge cases) only
+    // show up against real SQLite behavior, not a mocked DAO.
+    testImplementation("androidx.room:room-testing:$roomVersion")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.05.00"))

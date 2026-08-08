@@ -16,8 +16,16 @@ import kotlinx.coroutines.launch
  * Simple OCR service for processing images in background
  * Based on ScreenshotGo's approach - simple and effective
  */
-class SimpleOcrService(private val context: Context) {
-    
+class SimpleOcrService(
+    private val context: Context,
+    // Injectable for tests (e.g. an in-memory Room database seeded with known OCR text), so the
+    // search-matching logic below can be verified against real SQLite/FTS4 behavior without a
+    // device or emulator. Defaults to the same production singletons every existing call site
+    // already used, so this is not a behavior change for the app itself.
+    injectedDatabase: MediaDatabase? = null,
+    injectedClassificationDb: ClassificationDatabase? = null
+) {
+
     companion object {
         private const val TAG = "SimpleOcrService"
         private const val BATCH_SIZE = 10
@@ -33,13 +41,13 @@ class SimpleOcrService(private val context: Context) {
             }
         }
     }
-    
-    private val database by lazy {
-        MediaDatabase.getInstance(context)
+
+    private val database: MediaDatabase by lazy {
+        injectedDatabase ?: MediaDatabase.getInstance(context)
     }
 
-    private val classificationDb by lazy {
-        ClassificationDatabase.getInstance(context)
+    private val classificationDb: ClassificationDatabase by lazy {
+        injectedClassificationDb ?: ClassificationDatabase.getInstance(context)
     }
 
     private var isProcessing = false
