@@ -373,14 +373,22 @@ fun DeviceMedia(
                             onClick = {
                             when (viewProperties.operation) {
                                 ImageFunctions.LoadNormalImage -> {
-                                    // mainViewModel.setGroupedMedia(groupedMedia.value)
+                                    // Set synchronously at tap-time (not left to the calling
+                                    // screen's own reactive LaunchedEffect) so the shared bus is
+                                    // guaranteed to already contain mediaStoreItem the instant
+                                    // SinglePhotoView's first composition reads it -- otherwise,
+                                    // for screens whose data loads asynchronously (e.g. a
+                                    // Curated Album's tag+MediaStore join query), a fast tap can
+                                    // land before that LaunchedEffect has run, leaving the shared
+                                    // list empty/stale and the opened photo view blank.
+                                    mainViewModel.setGroupedMedia(groupedMedia.value)
 
                                     val isSearchResult = viewProperties == ViewProperties.SearchLoading || viewProperties == ViewProperties.SearchNotFound
                                     navController.navigate(
                                         Screens.SinglePhotoView(
                                             albumInfo = albumInfo,
                                             mediaItemId = mediaStoreItem.id,
-                                            loadsFromMainViewModel = isSearchResult || viewProperties == ViewProperties.Favourites || viewProperties == ViewProperties.SmartAlbum,
+                                            loadsFromMainViewModel = isSearchResult || viewProperties == ViewProperties.Favourites || viewProperties == ViewProperties.SmartAlbum || viewProperties == ViewProperties.CuratedAlbum,
                                             searchQuery = if (isSearchResult) searchQuery else ""
                                         )
                                     )

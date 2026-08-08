@@ -23,7 +23,7 @@ class FavouritesViewModel : ViewModel() {
     private val dao = MainActivity.applicationDatabase.favouritedItemEntityDao()
 
     val mediaFlow by lazy {
-        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
 
 	// TODO: switch to content resolver's favouriting system

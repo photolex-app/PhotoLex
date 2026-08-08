@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.peeyupatel.phototextsearch.database.entities.CuratedAlbumEntity
 import com.peeyupatel.phototextsearch.database.entities.CuratedAlbumPhotoEntity
 
@@ -27,6 +28,19 @@ interface CuratedAlbumDao {
 
     @Query("DELETE FROM curated_album WHERE id = :albumId")
     suspend fun deleteAlbum(albumId: Long)
+
+    @Query("DELETE FROM curated_album_photo WHERE album_id = :albumId")
+    suspend fun deleteAllTagsForAlbum(albumId: Long)
+
+    /** Deletes the album row AND its tag rows in one transaction -- plain [deleteAlbum] alone
+     * leaves [curated_album_photo] rows orphaned (no foreign-key cascade defined), silently
+     * accumulating dead rows referencing an album_id that no longer exists. Use this instead of
+     * [deleteAlbum] for any real album-deletion flow. */
+    @Transaction
+    suspend fun deleteAlbumAndTags(albumId: Long) {
+        deleteAllTagsForAlbum(albumId)
+        deleteAlbum(albumId)
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addPhotos(photos: List<CuratedAlbumPhotoEntity>)

@@ -34,7 +34,7 @@ class CustomAlbumViewModel(
     val mediaFlow by derivedStateOf {
         getMediaDataFlow().value.stateIn(
             viewModelScope,
-            SharingStarted.WhileSubscribed(),
+            SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
     }

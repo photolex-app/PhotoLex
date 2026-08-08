@@ -164,11 +164,12 @@ fun SinglePhotoView(
 
     var currentMediaItemIndex by rememberSaveable {
         mutableIntStateOf(
-            groupedMedia.value.indexOf(
-                groupedMedia.value.first {
-                    it.id == mediaItemId
-                }
-            )
+            // indexOfFirst (not indexOf+first) -- the shared groupedMedia bus can briefly not
+            // yet contain mediaItemId if this screen opens before an async loader (e.g. a
+            // Curated Album's photo query) finishes publishing its list; falling back to 0
+            // instead of crashing lets the pager open (on the wrong page for a frame) rather
+            // than never opening at all.
+            groupedMedia.value.indexOfFirst { it.id == mediaItemId }.coerceAtLeast(0)
         )
     }
 
@@ -185,6 +186,17 @@ fun SinglePhotoView(
 
     LaunchedEffect(key1 = state.currentPage) {
         currentMediaItemIndex = state.currentPage
+    }
+
+    // Corrects the pager if it opened on the wrong page (or on an empty list) because
+    // mediaItemId wasn't in groupedMedia yet at first composition -- once the real list
+    // arrives/updates and does contain it, jump straight there instead of silently staying on
+    // whatever page 0 happened to be (see the indexOfFirst fallback above).
+    LaunchedEffect(groupedMedia.value) {
+        val target = groupedMedia.value.indexOfFirst { it.id == mediaItemId }
+        if (target >= 0 && groupedMedia.value.getOrNull(state.currentPage)?.id != mediaItemId) {
+            state.scrollToPage(target)
+        }
     }
 
     val appBarsVisible = remember { mutableStateOf(true) }

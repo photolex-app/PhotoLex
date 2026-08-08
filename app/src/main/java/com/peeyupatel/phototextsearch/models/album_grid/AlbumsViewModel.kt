@@ -24,7 +24,7 @@ class AlbumsViewModel(context: Context, var albumInfo: List<AlbumInfo>) : ViewMo
     private val mediaStoreDataSource = mutableStateOf(initDataSource(context = context, albums = albumInfo))
 
     val mediaFlow by derivedStateOf {
-        getMediaDataFlow().value.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        getMediaDataFlow().value.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
 
     private fun getMediaDataFlow(): State<Flow<List<Pair<AlbumInfo, MediaStoreData>>>> = derivedStateOf {

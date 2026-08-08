@@ -40,7 +40,7 @@ class SearchViewModel(context: Context, sortBy: MediaItemSortMode) : ViewModel()
     private val ocrService = SimpleOcrService.getInstance(context)
 
     val mediaFlow by lazy {
-        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
 
     // Search suggestions flow

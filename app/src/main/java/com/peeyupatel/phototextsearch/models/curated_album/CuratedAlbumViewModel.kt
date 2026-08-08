@@ -51,7 +51,14 @@ class CuratedAlbumViewModel(
             ).loadMediaStoreData()
         }
     }.flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        // 5s grace period, not the zero-timeout default -- WhileSubscribed() with no timeout
+        // drops the upstream the instant collection briefly gaps (e.g. a recomposition during
+        // navigation), which restarts the whole MediaStore query from scratch and re-emits an
+        // empty list for a moment. That empty list was overwriting the shared
+        // mainViewModel.groupedMedia bus (via the screen's own LaunchedEffect) right as
+        // SinglePhotoView tried to read it, showing "Broken Media" -- confirmed as the real
+        // cause of that bug, not a SinglePhotoView-side timing issue.
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         refresh()

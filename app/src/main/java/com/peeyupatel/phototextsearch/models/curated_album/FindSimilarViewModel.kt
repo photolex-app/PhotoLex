@@ -57,7 +57,10 @@ class FindSimilarViewModel(
             ).loadMediaStoreData()
         }
     }.flowOn(Dispatchers.IO)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        // 5s grace period -- see CuratedAlbumViewModel's identical fix for why a zero-timeout
+        // WhileSubscribed() here can transiently overwrite the shared mainViewModel.groupedMedia
+        // bus with an empty list during navigation, breaking the single-photo viewer.
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
         viewModelScope.launch(Dispatchers.IO) {

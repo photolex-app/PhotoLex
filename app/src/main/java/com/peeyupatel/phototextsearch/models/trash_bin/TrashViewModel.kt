@@ -23,7 +23,7 @@ class TrashViewModel(context: Context) : ViewModel() {
         )
 
     val mediaFlow by lazy {
-        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+        getMediaDataFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
 
     private fun getMediaDataFlow(): Flow<List<MediaStoreData>> {

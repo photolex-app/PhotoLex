@@ -80,6 +80,7 @@ import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.SelectViewTopBarLeftButtons
 import com.peeyupatel.phototextsearch.compose.SelectViewTopBarRightButtons
+import com.peeyupatel.phototextsearch.compose.dialogs.AddToCuratedAlbumDialog
 import com.peeyupatel.phototextsearch.compose.dialogs.AlbumAddChoiceDialog
 import com.peeyupatel.phototextsearch.compose.dialogs.ConfirmationDialog
 import com.peeyupatel.phototextsearch.compose.grids.MoveCopyAlbumListView
@@ -88,6 +89,9 @@ import com.peeyupatel.phototextsearch.datastore.DefaultTabs
 import com.peeyupatel.phototextsearch.datastore.Permissions
 import com.peeyupatel.phototextsearch.helpers.GetPermissionAndRun
 import com.peeyupatel.phototextsearch.helpers.setTrashedOnPhotoList
+import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarController
+import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarEvents
+import androidx.compose.material3.SnackbarDuration
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
 import kotlinx.coroutines.Dispatchers
@@ -705,6 +709,35 @@ fun MainAppSelectingBottomBar(
                     action = {
                         isMoving = false
                         show.value = true
+                    }
+                )
+
+                var showAddToAlbumDialog by remember { mutableStateOf(false) }
+                if (showAddToAlbumDialog) {
+                    AddToCuratedAlbumDialog(
+                        mediaIds = selectedItemsWithoutSection.map { it.id },
+                        onDismiss = { showAddToAlbumDialog = false },
+                        onAdded = { albumName, count ->
+                            showAddToAlbumDialog = false
+                            selectedItemsList.clear()
+                            coroutineScope.launch {
+                                LavenderSnackbarController.pushEvent(
+                                    LavenderSnackbarEvents.MessageEvent(
+                                        message = "Added $count photo${if (count == 1) "" else "s"} to \"$albumName\"",
+                                        iconResId = R.drawable.check_item,
+                                        duration = SnackbarDuration.Short
+                                    )
+                                )
+                            }
+                        }
+                    )
+                }
+
+                BottomAppBarItem(
+                    text = "Album",
+                    iconResId = R.drawable.add,
+                    action = {
+                        showAddToAlbumDialog = true
                     }
                 )
 

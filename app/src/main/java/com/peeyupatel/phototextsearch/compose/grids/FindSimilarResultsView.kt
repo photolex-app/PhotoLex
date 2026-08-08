@@ -1,8 +1,11 @@
 package com.peeyupatel.phototextsearch.compose.grids
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,10 +14,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,20 +31,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.peeyupatel.phototextsearch.MainActivity.Companion.mainViewModel
 import com.peeyupatel.phototextsearch.compose.ViewProperties
+import com.peeyupatel.phototextsearch.compose.dialogs.AddToCuratedAlbumDialog
+import com.peeyupatel.phototextsearch.compose.dialogs.ConfirmationDialogWithBody
 import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarController
 import com.peeyupatel.phototextsearch.lavender_snackbars.LavenderSnackbarEvents
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
+import com.peeyupatel.phototextsearch.helpers.permanentlyDeletePhotoList
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
+import com.peeyupatel.phototextsearch.mediastore.MediaType
 import com.peeyupatel.phototextsearch.models.curated_album.FindSimilarViewModel
 import com.peeyupatel.phototextsearch.models.curated_album.FindSimilarViewModelFactory
 import androidx.compose.material3.SnackbarDuration
 import kotlinx.coroutines.launch
 
 /**
- * Full-screen "photos similar to this one" results, driven by DocumentSimilarityMatcher.
- * Lets the user save the whole match set as a new named Curated Album (tag-only, no photo
- * copies) via the top-bar "+" action.
+ * Full-screen "photos similar to this one" results, driven by DocumentSimilarityMatcher. The
+ * "+" action and, once a selection is made, a bottom bar both open the same combined
+ * create-new-or-add-to-existing album picker -- they act on the current selection when one
+ * exists, or the whole result set otherwise.
  */
 @Composable
 fun FindSimilarResultsView(
@@ -66,10 +71,20 @@ fun FindSimilarResultsView(
     }
 
     val selectedItemsList = remember { mutableStateListOf<MediaStoreData>() }
+    val selectedWithoutSection by remember {
+        androidx.compose.runtime.derivedStateOf { selectedItemsList.filter { it.type != MediaType.Section } }
+    }
     val gridState = rememberLazyGridState()
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var albumName by remember { mutableStateOf("") }
+    var showAddToAlbumDialog by remember { mutableStateOf(false) }
+    val showDeleteDialog = remember { mutableStateOf(false) }
     val snackbarScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Frozen at the moment the action is tapped, not re-derived while a dialog is open --
+    // otherwise a recomposition mid-dialog (e.g. triggered by the keyboard opening for the
+    // album-name field) can re-read selectedWithoutSection as transiently empty and silently
+    // fall back to "the whole result set", tagging/deleting far more than the user selected.
+    var pendingAlbumTargetIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var pendingDeleteTargets by remember { mutableStateOf<List<MediaStoreData>>(emptyList()) }
 
     Column(
         modifier = Modifier
@@ -85,21 +100,26 @@ fun FindSimilarResultsView(
                 Icon(painterResource(id = R.drawable.back_arrow), contentDescription = "Back")
             }
             Text(
-                text = "Similar Documents",
+                text = if (selectedWithoutSection.isEmpty()) "Similar Documents" else "${selectedWithoutSection.size} selected",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.align(Alignment.Center)
             )
             if (groupedMedia.value.isNotEmpty()) {
                 IconButton(
-                    onClick = { showSaveDialog = true },
+                    onClick = {
+                        pendingAlbumTargetIds = (selectedWithoutSection.ifEmpty {
+                            groupedMedia.value.filter { it.type != MediaType.Section }
+                        }).map { it.id }
+                        showAddToAlbumDialog = true
+                    },
                     modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
-                    Icon(painterResource(id = R.drawable.add), contentDescription = "Save as Album")
+                    Icon(painterResource(id = R.drawable.add), contentDescription = "Add to Album")
                 }
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.weight(1f)) {
             when {
                 isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -126,50 +146,72 @@ fun FindSimilarResultsView(
                 }
             }
         }
+
+        if (selectedWithoutSection.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable {
+                            pendingAlbumTargetIds = selectedWithoutSection.map { it.id }
+                            showAddToAlbumDialog = true
+                        }
+                        .padding(horizontal = 24.dp, vertical = 4.dp)
+                ) {
+                    Icon(painterResource(id = R.drawable.add), contentDescription = "Add to Album")
+                    Text("Add to Album", style = MaterialTheme.typography.labelSmall)
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable {
+                            pendingDeleteTargets = selectedWithoutSection
+                            showDeleteDialog.value = true
+                        }
+                        .padding(horizontal = 24.dp, vertical = 4.dp)
+                ) {
+                    Icon(painterResource(id = R.drawable.delete), contentDescription = "Delete")
+                    Text("Delete", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 
-    if (showSaveDialog) {
-        AlertDialog(
-            onDismissRequest = { showSaveDialog = false },
-            title = { Text("Save as Album") },
-            text = {
-                OutlinedTextField(
-                    value = albumName,
-                    onValueChange = { albumName = it },
-                    label = { Text("Album name") },
-                    singleLine = true
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val name = albumName.trim()
-                        if (name.isNotEmpty()) {
-                            val mediaIds = groupedMedia.value.map { it.id }
-                            viewModel.saveAsAlbum(name, mediaIds) {
-                                snackbarScope.launch {
-                                    LavenderSnackbarController.pushEvent(
-                                        LavenderSnackbarEvents.MessageEvent(
-                                            message = "Saved \"$name\" with ${mediaIds.size} photos",
-                                            iconResId = R.drawable.check_item,
-                                            duration = SnackbarDuration.Short
-                                        )
-                                    )
-                                }
-                            }
-                            showSaveDialog = false
-                            albumName = ""
-                        }
-                    }
-                ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) {
-                    Text("Cancel")
+    if (showAddToAlbumDialog) {
+        AddToCuratedAlbumDialog(
+            mediaIds = pendingAlbumTargetIds,
+            onDismiss = { showAddToAlbumDialog = false },
+            onAdded = { albumName, count ->
+                showAddToAlbumDialog = false
+                selectedItemsList.clear()
+                snackbarScope.launch {
+                    LavenderSnackbarController.pushEvent(
+                        LavenderSnackbarEvents.MessageEvent(
+                            message = "Added $count photo${if (count == 1) "" else "s"} to \"$albumName\"",
+                            iconResId = R.drawable.check_item,
+                            duration = SnackbarDuration.Short
+                        )
+                    )
                 }
             }
         )
+    }
+
+    ConfirmationDialogWithBody(
+        showDialog = showDeleteDialog,
+        dialogTitle = "Permanently delete these items?",
+        dialogBody = "This action cannot be undone!",
+        confirmButtonLabel = "Delete"
+    ) {
+        val toDelete = pendingDeleteTargets
+        permanentlyDeletePhotoList(context, toDelete.map { it.uri })
+        groupedMedia.value = groupedMedia.value.filter { it !in toDelete }
+        selectedItemsList.clear()
     }
 }
