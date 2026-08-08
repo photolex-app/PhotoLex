@@ -56,9 +56,12 @@ class OcrNotificationManager(private val context: Context) {
     }
     
     /**
-     * Show OCR processing notification
+     * Show OCR processing notification.
+     * @param stuckMessage when non-null, overrides the normal progress/status text -- used to
+     * surface "scan appears stuck, reopen to resume" instead of leaving a stale percentage
+     * showing forever (see OcrManager's stuck-progress detection).
      */
-    fun showProcessingNotification(progress: OcrProgressEntity) {
+    fun showProcessingNotification(progress: OcrProgressEntity, stuckMessage: String? = null) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("navigate_to_ocr_settings", true)
@@ -94,7 +97,7 @@ class OcrNotificationManager(private val context: Context) {
         } else ""
 
         val progressText = "${progress.processedImages}/${progress.totalImages} (${progress.progressPercentage}%)"
-        val detailText = "$statusText: $progressText$timeRemainingText"
+        val detailText = stuckMessage ?: "$statusText: $progressText$timeRemainingText"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("PhotoLex - OCR Processing")
@@ -193,10 +196,15 @@ class OcrNotificationManager(private val context: Context) {
     }
     
     /**
-     * Update notification with new progress
+     * Update notification with new progress.
+     * @param stuckMessage when non-null, shows this text instead of the normal progress text,
+     * even if isProcessing/isPaused have already flipped false by the time this is called (the
+     * stuck-detection path marks processing stopped in the same breath it wants to notify).
      */
-    fun updateProgress(progress: OcrProgressEntity) {
-        if (progress.isComplete) {
+    fun updateProgress(progress: OcrProgressEntity, stuckMessage: String? = null) {
+        if (stuckMessage != null) {
+            showProcessingNotification(progress, stuckMessage)
+        } else if (progress.isComplete) {
             showCompletionNotification(progress.processedImages)
         } else if (progress.isProcessing || progress.isPaused) {
             showProcessingNotification(progress)

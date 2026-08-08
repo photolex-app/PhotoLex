@@ -210,11 +210,19 @@ class DevanagariOcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(requiresBatteryNotLow())
+            // This is the "clear a real backlog fast" entry point -- the app's first
+            // full-gallery scan, or catching up after the app was closed a while. Deferring
+            // to Android's system "battery low" signal here silently pauses the entire scan
+            // with no user-visible explanation (confirmed live on the Latin pipeline: a scan
+            // stalled for hours until the phone was plugged in -- same WorkManager mechanism
+            // applies here). The per-image battery check in
+            // DevanagariOcrIndexingWorker's dispatch loop is the real safety floor for this
+            // path instead, so it's safe to ignore the system signal here.
+            .setRequiresBatteryNotLow(false)
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()
-        Log.d(TAG, "Work constraints created (no network/charging/idle requirements; battery-not-low follows the user's indexOnLowBattery setting)")
+        Log.d(TAG, "Work constraints created (no network/charging/idle/battery-not-low requirements -- backlog-clearing scan, per-image battery floor applies instead)")
 
         val workRequest = OneTimeWorkRequestBuilder<DevanagariOcrIndexingWorker>()
             .setInputData(inputData)
@@ -334,6 +342,14 @@ class DevanagariOcrManager(
                                 if (stuckProgressCounter >= maxStuckIterations) {
                                     Log.w(TAG, "Devanagari progress stuck for too long, marking as not processing")
                                     database.devanagariOcrProgressDao().updateProcessingStatus(false)
+                                    // Surface this to the user instead of just logging it -- without
+                                    // this the notification (if shown) would keep displaying a stale
+                                    // percentage forever, looking like the app is stuck rather than
+                                    // honestly reporting that the scan stopped.
+                                    notificationManager.updateProgress(
+                                        progress.copy(isProcessing = false),
+                                        stuckMessage = "Scan paused — reopen PhotoLex to resume"
+                                    )
                                     stuckProgressCounter = 0
                                 }
                             } else {

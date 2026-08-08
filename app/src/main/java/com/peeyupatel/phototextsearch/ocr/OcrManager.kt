@@ -196,7 +196,15 @@ class OcrManager(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-            .setRequiresBatteryNotLow(requiresBatteryNotLow())
+            // Unlike processImage/processBatch (which respect the user's indexOnLowBattery
+            // setting via requiresBatteryNotLow()), this is the "clear a real backlog fast"
+            // entry point -- the app's first full-gallery scan, or catching up after the app
+            // was closed a while. Deferring to Android's system "battery low" signal here
+            // silently pauses the entire scan with no user-visible explanation (confirmed
+            // live: a scan stalled for hours until the phone was plugged in). The per-image
+            // battery check in OcrIndexingWorker's dispatch loop is the real safety floor for
+            // this path instead, so it's safe to ignore the system signal here.
+            .setRequiresBatteryNotLow(false)
             .setRequiresCharging(false)
             .setRequiresDeviceIdle(false)
             .build()
@@ -255,6 +263,14 @@ class OcrManager(
                                 if (stuckProgressCounter >= maxStuckIterations) {
                                     Log.w(TAG, "Progress stuck for too long, marking as not processing")
                                     database.ocrProgressDao().updateProcessingStatus(false)
+                                    // Surface this to the user instead of just logging it -- without
+                                    // this the notification (if shown) would keep displaying a stale
+                                    // percentage forever, looking like the app is stuck rather than
+                                    // honestly reporting that the scan stopped.
+                                    notificationManager.updateProgress(
+                                        progress.copy(isProcessing = false),
+                                        stuckMessage = "Scan paused — reopen PhotoLex to resume"
+                                    )
                                     stuckProgressCounter = 0
                                 }
                             } else {

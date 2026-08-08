@@ -57,15 +57,20 @@ class DevanagariOcrNotificationManager(private val context: Context) {
     }
 
     /**
-     * Show or update progress notification
+     * Show or update progress notification.
+     * @param stuckMessage when non-null, shows this text instead of the normal progress text --
+     * used to surface "scan appears stuck, reopen to resume" instead of leaving a stale
+     * percentage showing forever (see DevanagariOcrManager's stuck-progress detection). Takes
+     * priority over the normal isProcessing/isPaused-based hide/show logic, since the
+     * stuck-detection path marks processing stopped in the same breath it wants to notify.
      */
-    fun updateProgress(progress: DevanagariOcrProgressEntity) {
+    fun updateProgress(progress: DevanagariOcrProgressEntity, stuckMessage: String? = null) {
         Log.d(TAG, "🔔 === UPDATING DEVANAGARI OCR NOTIFICATION ===")
         Log.d(TAG, "Progress: ${progress.processedImages}/${progress.totalImages} (${progress.progressPercentage}%)")
         Log.d(TAG, "Is processing: ${progress.isProcessing}, Is paused: ${progress.isPaused}")
         Log.d(TAG, "Progress dismissed: ${progress.progressDismissed}")
 
-        if (!progress.isProcessing && !progress.isPaused) {
+        if (stuckMessage == null && !progress.isProcessing && !progress.isPaused) {
             Log.d(TAG, "❌ Not processing and not paused - hiding notification")
             // Hide notification when not processing
             hideNotification()
@@ -73,7 +78,7 @@ class DevanagariOcrNotificationManager(private val context: Context) {
         }
 
         Log.d(TAG, "📝 Creating progress notification...")
-        val notification = createProgressNotification(progress)
+        val notification = createProgressNotification(progress, stuckMessage)
         Log.d(TAG, "📤 Showing notification with ID: $NOTIFICATION_ID")
         notificationManager.notify(NOTIFICATION_ID, notification)
         Log.d(TAG, "✅ Notification displayed successfully")
@@ -82,17 +87,18 @@ class DevanagariOcrNotificationManager(private val context: Context) {
     /**
      * Create progress notification
      */
-    private fun createProgressNotification(progress: DevanagariOcrProgressEntity): Notification {
+    private fun createProgressNotification(progress: DevanagariOcrProgressEntity, stuckMessage: String? = null): Notification {
         Log.d(TAG, "🏗️ Building notification content...")
         val progressPercentage = progress.progressPercentage
         val statusText = when {
+            stuckMessage != null -> "Paused"
             progress.isPaused -> "Paused"
             progress.isProcessing -> "Processing"
             else -> "Completed"
         }
 
         val title = "Devanagari OCR $statusText"
-        val text = "${progress.processedImages}/${progress.totalImages} images processed ($progressPercentage%)"
+        val text = stuckMessage ?: "${progress.processedImages}/${progress.totalImages} images processed ($progressPercentage%)"
 
         Log.d(TAG, "Notification content:")
         Log.d(TAG, "  Title: $title")

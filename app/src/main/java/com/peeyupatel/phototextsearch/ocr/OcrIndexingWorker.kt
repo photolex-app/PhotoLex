@@ -20,6 +20,7 @@ import com.peeyupatel.phototextsearch.database.entities.OcrTextEntity
 import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntity
 import com.peeyupatel.phototextsearch.mediastore.MediaStoreData
 import com.peeyupatel.phototextsearch.mediastore.MediaType
+import android.os.BatteryManager
 import android.os.Build
 import android.provider.MediaStore
 import android.net.Uri
@@ -70,6 +71,13 @@ class OcrIndexingWorker(
 
         private const val FOREGROUND_NOTIFICATION_ID = 3002
         private const val FOREGROUND_CHANNEL_ID = "ocr_worker_foreground"
+
+        // Hard app-controlled safety floor for the backlog-clearing path (startContinuousProcessing
+        // now runs with setRequiresBatteryNotLow(false), deliberately ignoring Android's system
+        // "battery low" signal so a real backlog scan doesn't silently stall for hours -- see
+        // OcrManager.startContinuousProcessing). Without this floor, nothing would stop a long
+        // scan short of literally running the battery to 0%.
+        private const val CRITICAL_BATTERY_PERCENT = 10
     }
 
     /**
@@ -552,6 +560,17 @@ class OcrIndexingWorker(
                         break
                     }
 
+                    // Hard safety floor: this backlog-clearing path now ignores Android's system
+                    // "battery low" signal (see OcrManager.startContinuousProcessing), so nothing
+                    // else stops a long scan short of 0% without this. Checked once per image
+                    // dispatch, same cadence as the isPaused check above.
+                    val batteryPercent = currentBatteryPercent()
+                    if (batteryPercent != null && batteryPercent <= CRITICAL_BATTERY_PERCENT) {
+                        Log.d(TAG, "Battery critically low (${batteryPercent}%), pausing OCR scan to preserve battery")
+                        wasPausedMidRun = true
+                        break
+                    }
+
                     semaphore.acquire()
                     launch {
                         // Tracks whether the permit was already released early (right after the
@@ -697,6 +716,21 @@ class OcrIndexingWorker(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process batch", e)
             Result.failure(workDataOf(KEY_ERRORS to e.message))
+        }
+    }
+
+    /**
+     * Reads the current battery percentage (0-100), or null if unavailable. Used as the hard
+     * safety floor for the backlog-clearing path -- see CRITICAL_BATTERY_PERCENT.
+     */
+    private fun currentBatteryPercent(): Int? {
+        return try {
+            val batteryManager = applicationContext.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            val level = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            if (level in 0..100) level else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read battery level", e)
+            null
         }
     }
 

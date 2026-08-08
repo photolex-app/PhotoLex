@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.BatteryManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -59,6 +60,12 @@ class DevanagariOcrIndexingWorker(
 
         private const val FOREGROUND_NOTIFICATION_ID = 3003
         private const val FOREGROUND_CHANNEL_ID = "ocr_worker_foreground"
+
+        // Hard app-controlled safety floor for the backlog-clearing path -- same rationale as
+        // OcrIndexingWorker.CRITICAL_BATTERY_PERCENT (startContinuousProcessing deliberately
+        // ignores Android's system "battery low" signal so a real backlog scan doesn't silently
+        // stall for hours, so this is what actually stops a long scan before 0%).
+        private const val CRITICAL_BATTERY_PERCENT = 10
     }
 
     private val textExtractor = DevanagariOcrTextExtractor(applicationContext)
@@ -452,6 +459,17 @@ class DevanagariOcrIndexingWorker(
                         break
                     }
 
+                    // Hard safety floor: this backlog-clearing path ignores Android's system
+                    // "battery low" signal (see DevanagariOcrManager.startContinuousProcessing),
+                    // so nothing else stops a long scan short of 0% without this. Checked once
+                    // per image dispatch, same cadence as the isPaused check above.
+                    val batteryPercent = currentBatteryPercent()
+                    if (batteryPercent != null && batteryPercent <= CRITICAL_BATTERY_PERCENT) {
+                        Log.d(TAG, "Battery critically low (${batteryPercent}%), pausing OCR scan to preserve battery")
+                        wasPausedMidRun = true
+                        break
+                    }
+
                     semaphore.acquire()
                     launch {
                         try {
@@ -542,6 +560,20 @@ class DevanagariOcrIndexingWorker(
             return Result.failure(workDataOf(
                 KEY_ERROR to "Batch processing failed: ${e.message}"
             ))
+        }
+    }
+
+     * Reads the current battery percentage (0-100), or null if unavailable. Used as the hard
+     * safety floor for the backlog-clearing path -- see CRITICAL_BATTERY_PERCENT.
+     */
+    private fun currentBatteryPercent(): Int? {
+        return try {
+            val batteryManager = applicationContext.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+            val level = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+            if (level in 0..100) level else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read battery level", e)
+            null
         }
     }
 
