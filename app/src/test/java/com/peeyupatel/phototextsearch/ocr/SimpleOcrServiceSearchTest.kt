@@ -128,6 +128,23 @@ class SimpleOcrServiceSearchTest {
     }
 
     @Test(timeout = 15_000)
+    fun `a shorter single-word query is a superset of the longer word it's a prefix of`() = runTest {
+        // A user narrowing "chandrika" down to "chand" should see at least everything the
+        // full word finds -- "chand" is a substring of "chandrika", so it must not be a
+        // *stricter* search than the full word.
+        seedLatin(1L, "K CHANDRIKA BEN PATEL income tax department")
+
+        val fullWordResults = service.searchImagesByText("chandrika")
+        val prefixResults = service.searchImagesByText("chand")
+
+        assertTrue("full word search should find the photo", fullWordResults.contains(1L))
+        assertTrue(
+            "'chand' must find everything 'chandrika' finds, since it's a substring of it",
+            prefixResults.contains(1L)
+        )
+    }
+
+    @Test(timeout = 15_000)
     fun `multi-word query finds a photo matching only one of the words`() = runTest {
         seedLatin(1L, "invoice number 88213 dated today")
         seedLatin(2L, "completely different unrelated content")

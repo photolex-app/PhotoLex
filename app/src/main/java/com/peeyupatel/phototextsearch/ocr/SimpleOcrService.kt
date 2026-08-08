@@ -215,26 +215,29 @@ class SimpleOcrService(
                     Log.w(TAG, "Devanagari exact search failed: ${e.message}")
                 }
 
-                // Additional word-based search for better recall
+                // Additional word-based prefix search for better recall -- also runs for a
+                // single-word query (not just multi-word), since ftsPhraseQuery above is an
+                // *exact* token match: searching "chand" would otherwise never find a photo
+                // whose OCR text only contains the longer token "chandrika", even though
+                // "chand" is a substring of it. A shorter query must be a superset of (or equal
+                // to) what the longer word it's a prefix of finds, not stricter than it.
                 val words = query.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
-                if (words.size > 1) {
-                    for (word in words) {
-                        if (word.length >= 2) {
-                            // Search Latin OCR for individual words -- FTS prefix match first
-                            try {
-                                val latinWordResults = searchLatinFtsOrFallback(ftsPrefixQuery(word), word)
-                                results.addAll(latinWordResults.map { it.mediaId })
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Latin word search failed for '$word': ${e.message}")
-                            }
+                for (word in words) {
+                    if (word.length >= 2) {
+                        // Search Latin OCR for individual words -- FTS prefix match first
+                        try {
+                            val latinWordResults = searchLatinFtsOrFallback(ftsPrefixQuery(word), word)
+                            results.addAll(latinWordResults.map { it.mediaId })
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Latin word search failed for '$word': ${e.message}")
+                        }
 
-                            // Search Devanagari OCR for individual words -- FTS prefix match first
-                            try {
-                                val devanagariWordResults = searchDevanagariFtsOrFallback(ftsPrefixQuery(word), word)
-                                results.addAll(devanagariWordResults.map { it.mediaId })
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Devanagari word search failed for '$word': ${e.message}")
-                            }
+                        // Search Devanagari OCR for individual words -- FTS prefix match first
+                        try {
+                            val devanagariWordResults = searchDevanagariFtsOrFallback(ftsPrefixQuery(word), word)
+                            results.addAll(devanagariWordResults.map { it.mediaId })
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Devanagari word search failed for '$word': ${e.message}")
                         }
                     }
                 }

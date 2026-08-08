@@ -70,11 +70,23 @@ fun SearchBar(
                 ) 
             },
             leadingIcon = {
-                Icon(
-                    painter = painterResource(id = R.drawable.search),
-                    contentDescription = "Search",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
+                // Tapping the search glyph itself submits the search -- a visible, always-
+                // discoverable way to trigger it, since relying solely on the keyboard's IME
+                // "search" action isn't obvious to every user (and isn't even reliably
+                // triggerable by anything other than a real on-screen tap -- a simulated
+                // hardware Enter key press doesn't fire it the same way).
+                IconButton(
+                    onClick = {
+                        onSearch()
+                        keyboardController?.hide()
+                    }
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.search),
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
             },
             trailingIcon = {
                 Row(

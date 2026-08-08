@@ -466,6 +466,25 @@ fun SearchPage(
             }
         }
 
+        // Showing the base gallery when there's no search text isn't really "search" at all --
+        // it must run immediately (on first load and whenever the field is cleared), not wait
+        // for an explicit submit like the real search below does. This was accidentally folded
+        // into the searchNow-gated effect below in an earlier pass, which meant visiting the
+        // Search tab for the first time (searchNow still false) got stuck showing "Unable to
+        // find any matches" with the loading spinner spinning forever instead of the gallery.
+        LaunchedEffect(searchedForText.value, originalGroupedMedia.value) {
+            if (searchedForText.value != "") return@LaunchedEffect
+
+            val isGridView = mainViewModel.isGridViewMode.value
+            val mediaItems = originalGroupedMedia.value.filter { it.type != MediaType.Section }
+            groupedMedia.value = if (mediaItems.isNotEmpty()) {
+                groupGalleryBy(mediaItems, MediaItemSortMode.DateTaken, isGridView)
+            } else {
+                originalGroupedMedia.value
+            }
+            hideLoadingSpinner = true
+        }
+
         // Triggered by searchNow (Enter/IME search action, tapping a filter chip, or clearing
         // the field via the X button -- see SearchBar's onSearch/onClear and the filter chip
         // onClick handlers below, all of which flip searchNow) rather than by raw text changes.
@@ -485,16 +504,7 @@ fun SearchPage(
             println("SEARCH TRIGGERED - Query: '${searchedForText.value}', Type: $searchType")
 
             if (searchedForText.value == "") {
-                // Get the current grid view mode from MainViewModel
-                val isGridView = mainViewModel.isGridViewMode.value
-                // Filter out section items and regroup with current grid view mode
-                val mediaItems = originalGroupedMedia.value.filter { it.type != MediaType.Section }
-                groupedMedia.value = if (mediaItems.isNotEmpty()) {
-                    groupGalleryBy(mediaItems, MediaItemSortMode.DateTaken, isGridView)
-                } else {
-                    originalGroupedMedia.value
-                }
-                hideLoadingSpinner = true
+                // Already handled by the effect above -- just consume the trigger.
                 searchNow = false
                 return@LaunchedEffect
             }
