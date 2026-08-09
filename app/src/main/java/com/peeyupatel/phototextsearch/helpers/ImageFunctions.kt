@@ -1,6 +1,7 @@
 package com.peeyupatel.phototextsearch.helpers
 
 import android.app.Activity
+import android.content.ContentProviderOperation
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -93,12 +94,28 @@ fun setTrashedOnPhotoList(context: Context, list: List<Pair<Uri, String>>, trash
     }
 
     try {
-        list.forEach { (uri, path) ->
-            // order is very important!
-            // this WILL crash if you try to set last modified on a file that got moved from ex image.png to .trashed-{timestamp}-image.png
+        // Set each file's last-modified time before ANY MediaStore update touches it (a
+        // trashed-rename can happen as soon as its own update() applies, and setting
+        // lastModified on a file that's already been renamed to .trashed-... crashes) -- but
+        // the updates themselves are batched into a single ContentResolver.applyBatch() call
+        // below instead of N separate update() calls. Each individual update() used to fire
+        // its own separate MediaStore change notification; with N items selected at once, N
+        // separate notifications each triggered their own full-library re-query in every
+        // reactive data source observing MediaStore -- confirmed live as items visibly
+        // disappearing "one by one" over several seconds, with the home screen sluggish the
+        // whole time, instead of all vanishing together immediately. applyBatch coalesces this
+        // into one change notification for the whole selection.
+        list.forEach { (_, path) ->
             File(path).setLastModified(currentTimeMillis)
-            contentResolver.update(uri, trashedValues, null)
         }
+
+        val operations = list.map { (uri, _) ->
+            ContentProviderOperation.newUpdate(uri)
+                .withValues(trashedValues)
+                .build()
+        }
+
+        contentResolver.applyBatch(MediaStore.AUTHORITY, ArrayList(operations))
     } catch (e: Throwable) {
         Log.e(TAG, "Setting trashed $trashed on photo list failed.")
         e.printStackTrace()
@@ -307,6 +324,14 @@ fun moveImageListToPath(
         val contentResolver = context.contentResolver
 
         async {
+            // Collect originals whose copy succeeded, then delete them all in one batch at the
+            // end instead of one contentResolver.delete() per item -- each individual delete()
+            // fires its own separate MediaStore change notification, which (same root cause as
+            // the identical fix in setTrashedOnPhotoList) made multi-item moves visibly remove
+            // source items "one by one" with a lag between each, instead of all at once, since
+            // every reactive data source observing MediaStore re-queried the whole library on
+            // every single notification.
+            val urisToDelete = mutableListOf<Uri>()
             list.forEach { media ->
                 contentResolver.copyMedia(
                     context = context,
@@ -314,7 +339,18 @@ fun moveImageListToPath(
                     destination = destination,
                     overwriteDate = overwriteDate
                 )?.let {
-                    contentResolver.delete(media.uri, null)
+                    urisToDelete.add(media.uri)
+                }
+            }
+
+            if (urisToDelete.isNotEmpty()) {
+                try {
+                    val operations = urisToDelete.map { uri ->
+                        ContentProviderOperation.newDelete(uri).build()
+                    }
+                    contentResolver.applyBatch(MediaStore.AUTHORITY, ArrayList(operations))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Batch delete of moved originals failed", e)
                 }
             }
         }.await()

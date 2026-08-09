@@ -15,7 +15,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 
 abstract class MediaStoreDataSource
 internal constructor(
@@ -29,16 +31,24 @@ internal constructor(
             MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
     }
 
+    // A single logical change (e.g. trashing one photo) reliably fires onChange() several times
+    // in a row -- confirmed live via added logging: one delete produced 4-6 near-simultaneous
+    // onChange calls, sometimes followed by further bursts up to a minute later (other
+    // background writers like OCR/classification touching MediaStore rows independently trigger
+    // the same broad content:// observer). Before debouncing, EVERY single one of those
+    // independently launched its own full re-query of the entire library (20,000+ rows, each
+    // doing EXIF/date-taken fallback work) -- confirmed live causing visible scroll jank/freezing
+    // right after a delete. Debouncing the trigger (not the query result) coalesces a whole burst
+    // into a single re-query after things settle down, rather than paying for each one.
+    private val REQUERY_DEBOUNCE_MS = 300L
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     open fun loadMediaStoreData(): Flow<List<MediaStoreData>> = callbackFlow {
         val contentObserver =
             object : ContentObserver(Handler(Looper.getMainLooper())) {
                 override fun onChange(selfChange: Boolean) {
                     super.onChange(selfChange)
-                    launch(Dispatchers.IO) {
-                        runCatching {
-                            trySend(query())
-                        }
-                    }
+                    trySend(Unit)
                 }
             }
 
@@ -48,11 +58,7 @@ internal constructor(
             contentObserver
         )
 
-        launch(Dispatchers.IO) {
-            runCatching {
-                trySend(query())
-            }
-        }
+        trySend(Unit)
 
         cancellationSignal.setOnCancelListener {
             try {
@@ -65,7 +71,11 @@ internal constructor(
         awaitClose {
             context.contentResolver.unregisterContentObserver(contentObserver)
         }
-    }.conflate()
+    }
+        .debounce(REQUERY_DEBOUNCE_MS)
+        .map { query() }
+        .flowOn(Dispatchers.IO)
+        .conflate()
 
     abstract fun query() : List<MediaStoreData>
 }
