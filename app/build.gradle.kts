@@ -47,7 +47,7 @@ android {
         //   monotonic-increase constraint, unlike versionCode, so this reset is safe) since it
         //   is PhotoLex's own first real release, not meaningfully related to the inherited
         //   v1.1.0 label.
-        versionCode = 104
+        versionCode = 105
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
