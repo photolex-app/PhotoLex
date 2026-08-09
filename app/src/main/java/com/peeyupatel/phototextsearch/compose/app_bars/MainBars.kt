@@ -97,6 +97,7 @@ import com.peeyupatel.phototextsearch.mediastore.MediaType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 import android.util.Log
 
@@ -755,7 +756,11 @@ fun MainAppSelectingBottomBar(
                                 trashed = true
                             )
 
-                            selectedItemsList.clear()
+                            // Clearing the selection is a Compose state mutation -- do it back on
+                            // the main thread once the file I/O above is done, not from IO.
+                            withContext(Dispatchers.Main) {
+                                selectedItemsList.clear()
+                            }
                         }
                     }
                 )

@@ -106,6 +106,18 @@ class MainViewModel(context: Context) : ViewModel() {
         _groupedMedia.value = media
     }
 
+    // Cross-screen channel for "region select to search": SinglePhotoView sets this after
+    // OCR'ing a user-selected crop of a photo, MainActivity's top-level composable observes it
+    // to switch the bottom nav to the Search tab, and SearchPage observes the same flow to run
+    // the actual search -- whichever of those two reads it second clears it back to null so it
+    // doesn't re-fire on a later recomposition.
+    private val _pendingSearchQuery = MutableStateFlow<String?>(null)
+    val pendingSearchQuery: Flow<String?> = _pendingSearchQuery.asStateFlow()
+
+    fun setPendingSearchQuery(query: String?) {
+        _pendingSearchQuery.value = query
+    }
+
     fun startupPermissionCheck(context: Context) {
         // READ_MEDIA_VIDEO isn't necessary as its bundled with READ_MEDIA_IMAGES
         val permList =

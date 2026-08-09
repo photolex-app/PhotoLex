@@ -24,6 +24,7 @@ class DevanagariOcrTextExtractor(private val context: Context) {
         private const val TAG = "DevanagariOcrTextExtractor"
         private const val MAX_IMAGE_SIZE = 1024 // Max dimension for OCR processing
         private const val OCR_TIMEOUT_MS = 3000L // 3 seconds timeout for OCR processing
+        private const val BITMAP_LOAD_TIMEOUT_MS = 5000L // 5 seconds timeout for loading/decoding the bitmap
     }
     
     /**
@@ -35,9 +36,17 @@ class DevanagariOcrTextExtractor(private val context: Context) {
 
             Log.d(TAG, "Starting Devanagari OCR processing for image: $imageUri")
 
-            // Load and optimize bitmap for OCR with fallback mechanisms
-            val bitmap = loadOptimizedBitmap(imageUri)
-                ?: return DevanagariOcrResult.Error("Failed to load image from URI")
+            // Load and optimize bitmap for OCR with fallback mechanisms. loadOptimizedBitmap()
+            // does synchronous, non-cancellable I/O (ContentResolver.openInputStream +
+            // BitmapFactory.decodeStream) -- a plain coroutine withTimeoutOrNull only makes this
+            // *caller* stop waiting, it can't actually kill that thread, so a genuinely hung
+            // decode just orphans a thread forever. Confirmed live over a long session: enough of
+            // these accumulated to exhaust the shared Dispatchers.IO pool entirely, silently
+            // blocking all future OCR work (not just the one bad image). Running it on
+            // BlockingCallHardTimeout's small dedicated pool contains any such hang there instead.
+            val bitmap = BlockingCallHardTimeout.runWithHardTimeout(BITMAP_LOAD_TIMEOUT_MS) {
+                loadOptimizedBitmap(imageUri)
+            } ?: return DevanagariOcrResult.Error("Failed to load image from URI (or timed out loading it)")
 
             Log.d(TAG, "Bitmap loaded successfully: ${bitmap.width}x${bitmap.height}, config: ${bitmap.config}")
 

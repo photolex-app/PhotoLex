@@ -228,6 +228,33 @@ fun SearchPage(
         val searchedForText = rememberSaveable { mutableStateOf("") }
         var searchNow by rememberSaveable { mutableStateOf(false) }
 
+        // This whole composable is disposed and recreated when navigating to a photo and back
+        // (e.g. opening a search result) -- searchedForText/searchNow survive that via
+        // rememberSaveable, but groupedMedia (the list PhotoGrid actually renders, declared
+        // further down) does not, and resets to the unfiltered gallery on return. searchNow was
+        // already saved back to false once the original search completed, so nothing re-ran the
+        // search to repopulate it. Re-running it once on re-entry keeps the results in sync with
+        // the (correctly restored) search box text instead of silently reverting to "show everything".
+        LaunchedEffect(Unit) {
+            if (searchedForText.value.isNotEmpty()) {
+                searchNow = true
+            }
+        }
+
+        // Region-select-to-search: SinglePhotoView OCRs a user-picked crop of a photo and
+        // drops the extracted text here (see mainViewModel.setPendingSearchQuery). Runs it
+        // through the exact same submit-triggered search path as typing+Enter, so it
+        // automatically benefits from the existing race-condition/prefix-search fixes.
+        val pendingSearchQuery by mainViewModel.pendingSearchQuery.collectAsStateWithLifecycle(initialValue = null)
+        LaunchedEffect(pendingSearchQuery) {
+            val query = pendingSearchQuery
+            if (query != null) {
+                searchedForText.value = query
+                searchNow = true
+                mainViewModel.setPendingSearchQuery(null)
+            }
+        }
+
         // Search type state: "metadata", "ocr", "combined" - Default to OCR for text search
         var searchType by rememberSaveable { mutableStateOf("ocr") }
 

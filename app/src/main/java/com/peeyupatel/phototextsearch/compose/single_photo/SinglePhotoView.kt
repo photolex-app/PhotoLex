@@ -215,6 +215,7 @@ fun SinglePhotoView(
 
     val showInfoDialog = remember { mutableStateOf(false) }
     val showRenameDialog = remember { mutableStateOf(false) }
+    val showRegionSearch = remember { mutableStateOf(false) }
     val textSelectionState = rememberTextSelectionState()
     val context = LocalContext.current
 
@@ -247,6 +248,24 @@ fun SinglePhotoView(
             modifier = Modifier.fillMaxSize()
         )
         return // Exit early to avoid showing the normal photo viewer
+    }
+
+    // Region-select-to-search: same early-return-to-swap-the-whole-screen pattern as text
+    // selection mode above.
+    if (showRegionSearch.value && currentMediaItem.value.type == MediaType.Image) {
+        RegionSearchOverlay(
+            imageUri = currentMediaItem.value.uri,
+            onDismiss = { showRegionSearch.value = false },
+            onSearch = { extractedText ->
+                showRegionSearch.value = false
+                mainViewModel.setPendingSearchQuery(extractedText)
+                navController.popBackStack(
+                    route = com.peeyupatel.phototextsearch.helpers.MultiScreenViewType.MainScreen.name,
+                    inclusive = false
+                )
+            }
+        )
+        return
     }
 
     // Search-result highlight: only runs when this photo was opened from a search hit.
@@ -315,6 +334,7 @@ fun SinglePhotoView(
                     groupedMedia = groupedMedia,
                     loadsFromMainViewModel = loadsFromMainViewModel,
                     state = state,
+                    onSearchRegion = { showRegionSearch.value = true },
                     showEditingView = {
                         setBarVisibility(
                             visible = true,
@@ -646,6 +666,7 @@ private fun BottomBar(
     groupedMedia: MutableState<List<MediaStoreData>>,
     loadsFromMainViewModel: Boolean,
     state: PagerState,
+    onSearchRegion: () -> Unit,
     showEditingView: () -> Unit,
     onZeroItemsLeft: () -> Unit
 ) {
@@ -759,6 +780,15 @@ private fun BottomBar(
                                     )
                                 )
                             }
+                        )
+                    }
+
+                    if (currentItem.type == MediaType.Image) {
+                        BottomAppBarItem(
+                            text = "Select",
+                            iconResId = R.drawable.highlighter,
+                            cornerRadius = 32.dp,
+                            action = onSearchRegion
                         )
                     }
 

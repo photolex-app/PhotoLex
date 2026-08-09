@@ -1,7 +1,9 @@
 package com.peeyupatel.phototextsearch.mediastore
 
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.os.Bundle
 import android.os.CancellationSignal
 import android.provider.MediaStore
 import android.provider.MediaStore.Files.FileColumns
@@ -50,12 +52,29 @@ class MultiAlbumDataSource(
             "Can only query from a background thread"
         )
         val data: MutableList<MediaStoreData> = emptyList<MediaStoreData>().toMutableList()
+
+        // Explicit QUERY_ARG_MATCH_TRASHED = MATCH_EXCLUDE, not a raw "is_trashed = 0" clause on
+        // the legacy 4-arg query() overload -- some OEM MediaProvider forks (e.g. ColorOS) don't
+        // reliably honor a trashed-exclusion clause written into the plain selection string on
+        // that overload, which left trashed photos visible here even though TrashStoreDataSource
+        // (already using this same Bundle-based approach, just with MATCH_ONLY) correctly excludes
+        // untrashed items from the Trash Bin view.
+        val queryArgs = Bundle().apply {
+            putString(
+                ContentResolver.QUERY_ARG_SQL_SELECTION,
+                "((${FileColumns.MEDIA_TYPE} = ${FileColumns.MEDIA_TYPE_IMAGE}) OR (${FileColumns.MEDIA_TYPE} = ${FileColumns.MEDIA_TYPE_VIDEO})) ${queryString.query}"
+            )
+            queryString.paths?.let {
+                putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, it.toTypedArray())
+            }
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_EXCLUDE)
+        }
+
         val mediaCursor =
             context.contentResolver.query(
                 MEDIA_STORE_FILE_URI,
                 PROJECTION,
-                "((${FileColumns.MEDIA_TYPE} = ${FileColumns.MEDIA_TYPE_IMAGE}) OR (${FileColumns.MEDIA_TYPE} = ${FileColumns.MEDIA_TYPE_VIDEO})) ${queryString.query}",
-                queryString.paths?.toTypedArray(),
+                queryArgs,
                 null,
             ) ?: return data
 

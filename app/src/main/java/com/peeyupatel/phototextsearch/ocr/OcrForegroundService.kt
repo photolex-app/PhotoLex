@@ -346,8 +346,14 @@ class OcrForegroundService : Service() {
                     if (progress != null && progress.isProcessing) {
                         renewWakeLock()
                         updateServiceNotification()
-                    } else if (progress != null && progress.isComplete) {
-                        Log.d(TAG, "Latin OCR processing completed")
+                    } else if (progress != null && !progress.isPaused) {
+                        // isComplete only means "every image succeeded" -- a run that ends with
+                        // one or more images permanently failing (never going to succeed on
+                        // retry) never satisfies it, so this branch never fired and the
+                        // foreground service (and its "Processing images in background"
+                        // notification) ran forever even after the worker had genuinely stopped.
+                        // !isProcessing && !isPaused is the actual "nothing left running" signal.
+                        Log.d(TAG, "Latin OCR processing finished (isComplete=${progress.isComplete})")
                         isLatinOcrActive = false
                         checkIfServiceShouldStop()
                     }
@@ -370,8 +376,10 @@ class OcrForegroundService : Service() {
                     if (progress != null && progress.isProcessing) {
                         renewWakeLock()
                         updateServiceNotification()
-                    } else if (progress != null && progress.isComplete) {
-                        Log.d(TAG, "Devanagari OCR processing completed")
+                    } else if (progress != null && !progress.isPaused) {
+                        // See the identical fix/comment in startLatinOcrMonitoring() -- isComplete
+                        // alone missed the "finished with permanent failures" case.
+                        Log.d(TAG, "Devanagari OCR processing finished (isComplete=${progress.isComplete})")
                         isDevanagariOcrActive = false
                         checkIfServiceShouldStop()
                     }

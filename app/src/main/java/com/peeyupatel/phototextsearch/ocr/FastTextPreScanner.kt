@@ -29,6 +29,7 @@ class FastTextPreScanner(private val context: Context) {
         private const val TAG = "FastTextPreScanner"
         private const val PRESCAN_MAX_DIMENSION = 400
         private const val PRESCAN_TIMEOUT_MS = 1500L
+        private const val BITMAP_LOAD_TIMEOUT_MS = 3000L
 
         /** Hamming distance (out of 64 bits) below which two dHashes are treated as the
          * same/near-identical photo. Deliberately strict/conservative -- missing a real
@@ -55,7 +56,14 @@ class FastTextPreScanner(private val context: Context) {
      * recognition error; see hasTextOrNull()).
      */
     suspend fun hasTextOrNull(uri: Uri): Boolean? {
-        val bitmap = loadSmallBitmap(uri) ?: return null
+        // loadSmallBitmap() is synchronous, non-cancellable I/O -- run it on the dedicated
+        // hard-timeout pool so a hung decode can't orphan a thread on the shared Dispatchers.IO
+        // pool (see BlockingCallHardTimeout for the live-confirmed symptom this caused on the
+        // Devanagari pipeline: enough such hangs over a session exhausted that shared pool
+        // entirely, silently blocking all future OCR work).
+        val bitmap = BlockingCallHardTimeout.runWithHardTimeout(BITMAP_LOAD_TIMEOUT_MS) {
+            loadSmallBitmap(uri)
+        } ?: return null
         return try {
             if (bitmap.width <= 0 || bitmap.height <= 0) return null
             val inputImage = InputImage.fromBitmap(bitmap, 0)
@@ -76,7 +84,9 @@ class FastTextPreScanner(private val context: Context) {
      * four signals from a single small decode instead of separate passes.
      */
     suspend fun scanWithHash(uri: Uri): PreScanResult {
-        val bitmap = loadSmallBitmap(uri) ?: return PreScanResult(null, null)
+        val bitmap = BlockingCallHardTimeout.runWithHardTimeout(BITMAP_LOAD_TIMEOUT_MS) {
+            loadSmallBitmap(uri)
+        } ?: return PreScanResult(null, null)
         return try {
             if (bitmap.width <= 0 || bitmap.height <= 0) return PreScanResult(null, null)
             val dHash = try {

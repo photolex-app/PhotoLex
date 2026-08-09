@@ -344,6 +344,17 @@ class MainActivity : ComponentActivity() {
         // because Search happens to be the default landing tab on cold launch.
         val searchBarFocusTrigger = remember { mutableStateOf(0) }
 
+        // Region-select-to-search: when SinglePhotoView sets mainViewModel.pendingSearchQuery
+        // (after the user crops a region and it gets OCR'd), switch to the Search tab here --
+        // SearchPage has its own separate LaunchedEffect on the same flow that actually runs
+        // the search and clears the value back to null once consumed.
+        val pendingSearchQuery by mainViewModel.pendingSearchQuery.collectAsStateWithLifecycle(initialValue = null)
+        LaunchedEffect(pendingSearchQuery) {
+            if (pendingSearchQuery != null) {
+                currentView.value = DefaultTabs.TabTypes.search
+            }
+        }
+
         val context = LocalContext.current
         val showDialog = remember { mutableStateOf(false) }
 
@@ -1515,7 +1526,20 @@ class MainActivity : ComponentActivity() {
                     // queries (getAllImages() fetches all photos, unlike Latin's bounded
                     // candidate-pool lookup) were observed to contend with each other badly
                     // enough that neither worker made progress for minutes.
-                    val alreadyRunning = devanagariProgress?.isProcessing == true || devanagariProgress?.isPaused == true
+                    //
+                    // isProcessing alone isn't trustworthy though -- it's set true right before
+                    // enqueueing and only ever cleared by the worker finishing or the in-app
+                    // stuck-watchdog, neither of which runs if the OS kills the process first
+                    // (confirmed live: isProcessing stayed true with zero worker activity in
+                    // logcat across multiple relaunches, permanently blocking this from ever
+                    // resuming). Cross-check it against WorkManager's own live state so a stale
+                    // flag from a killed process doesn't block resuming forever.
+                    val isGenuinelyProcessing = devanagariProgress?.isProcessing == true &&
+                        devanagariOcrManager.isContinuousWorkActuallyRunning()
+                    val alreadyRunning = isGenuinelyProcessing || devanagariProgress?.isPaused == true
+                    if (devanagariProgress?.isProcessing == true && !isGenuinelyProcessing) {
+                        Log.w(TAG, "Devanagari isProcessing flag was stale (no live WorkManager job found) -- will restart")
+                    }
                     if (processedCount < totalImages && !alreadyRunning) {
                         Log.d(TAG, "Starting automatic Devanagari OCR processing for ${totalImages - processedCount} remaining images")
 
@@ -1651,11 +1675,17 @@ class MainActivity : ComponentActivity() {
                         val devanagariProcessedCount = applicationDatabase.devanagariOcrProgressDao().getProcessedCount() ?: 0
                         Log.d(TAG, "Devanagari OCR progress: $devanagariProcessedCount/$totalImages processed")
 
-                        if (devanagariProcessedCount < totalImages && !devanagariProgress.isProcessing && !devanagariProgress.isPaused) {
-                            Log.d(TAG, "Resuming Devanagari OCR processing for remaining images")
+                        // isProcessing alone is stale-prone (see the identical cross-check
+                        // earlier in this file for the full explanation) -- verify against
+                        // WorkManager's own live state before treating it as "still running".
+                        val isGenuinelyProcessing = devanagariProgress.isProcessing &&
+                            devanagariOcrManager.isContinuousWorkActuallyRunning()
+
+                        if (devanagariProcessedCount < totalImages && !isGenuinelyProcessing && !devanagariProgress.isPaused) {
+                            Log.d(TAG, "Resuming Devanagari OCR processing for remaining images${if (devanagariProgress.isProcessing) " (isProcessing flag was stale)" else ""}")
                             applicationDatabase.devanagariOcrProgressDao().updateProcessingStatus(true)
                             devanagariOcrManager.startContinuousProcessing(batchSize = 50)
-                        } else if (devanagariProgress.isProcessing) {
+                        } else if (isGenuinelyProcessing) {
                             Log.d(TAG, "Devanagari OCR processing already in progress")
                         } else if (devanagariProgress.isPaused) {
                             Log.d(TAG, "Devanagari OCR processing is paused")

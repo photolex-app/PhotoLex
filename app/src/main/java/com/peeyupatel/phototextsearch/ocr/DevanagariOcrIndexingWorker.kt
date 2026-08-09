@@ -379,6 +379,9 @@ class DevanagariOcrIndexingWorker(
             if (unprocessedImages.isEmpty()) {
                 Log.d(TAG, "All images already processed for Devanagari OCR")
                 database.devanagariOcrProgressDao().updateProcessingStatus(false)
+                database.devanagariOcrProgressDao().getProgress()?.let { latestProgress ->
+                    notificationManager.updateProgress(latestProgress)
+                }
                 return Result.success(workDataOf(
                     KEY_TOTAL_PROCESSED to 0,
                     KEY_PROGRESS to "All images already processed"
@@ -534,17 +537,18 @@ class DevanagariOcrIndexingWorker(
                 }
             } // coroutineScope waits here for all launched (in-flight) images to finish
 
-            // Update final processing status. This must also cover the "paused mid-continuous-run"
-            // case (wasPausedMidRun) -- without it, isProcessing stays true forever after a pause
-            // during continuous processing (neither isComplete nor !processAll is true in that
-            // case), so the notification/UI kept showing "running" even though the worker had
-            // correctly stopped doing any actual work.
-            val finalProgress = database.devanagariOcrProgressDao().getProgress()
-            val isComplete = finalProgress?.isComplete == true
-
-            if (isComplete || !processAll || wasPausedMidRun) {
-                database.devanagariOcrProgressDao().updateProcessingStatus(false)
-                Log.d(TAG, "Devanagari OCR batch processing completed or paused")
+            // Always mark not-processing once this run's batch loop above has finished, and
+            // refresh the notification to match, regardless of *why* it ended (fully caught up,
+            // paused mid-run, or exhausted with some images permanently failing). It used to be
+            // conditional on isComplete/!processAll/wasPausedMidRun, but isComplete only tracks
+            // "every image succeeded" -- a run that ends with one or more images permanently
+            // failing (never going to succeed on retry) satisfied none of those conditions, so
+            // isProcessing silently stayed true and the notification stayed stuck showing a
+            // stale "99%, processing" state forever even though nothing was still running.
+            database.devanagariOcrProgressDao().updateProcessingStatus(false)
+            Log.d(TAG, "Devanagari OCR batch processing run finished")
+            database.devanagariOcrProgressDao().getProgress()?.let { latestProgress ->
+                notificationManager.updateProgress(latestProgress)
             }
 
             Log.d(TAG, "Devanagari OCR batch processing finished: ${processedCount.get()} processed, ${failedCount.get()} failed")
@@ -557,6 +561,9 @@ class DevanagariOcrIndexingWorker(
         } catch (e: Exception) {
             Log.e(TAG, "Devanagari OCR batch processing failed", e)
             database.devanagariOcrProgressDao().updateProcessingStatus(false)
+            database.devanagariOcrProgressDao().getProgress()?.let { latestProgress ->
+                notificationManager.updateProgress(latestProgress)
+            }
             return Result.failure(workDataOf(
                 KEY_ERROR to "Batch processing failed: ${e.message}"
             ))

@@ -733,7 +733,6 @@ fun MediaStoreItem(
             }
         }
 
-
         val animatedItemScale by animateFloatAsState(
             targetValue = if (isSelected) 0.8f else 1f,
             animationSpec = tween(

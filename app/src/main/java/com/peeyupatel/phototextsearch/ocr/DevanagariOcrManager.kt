@@ -270,6 +270,26 @@ class DevanagariOcrManager(
     }
 
     /**
+     * Whether the continuous batch work is genuinely still active in WorkManager, not just
+     * flagged as such in the progress table. The progress table's isProcessing flag is set to
+     * true right before enqueueing and never reliably cleared if the process is killed (by the
+     * OS/OEM background killer, or a crash) before the worker finishes -- callers that trust
+     * that flag alone to mean "don't bother starting a new run" can end up permanently skipping
+     * re-enqueueing forever after such a kill, even though nothing is actually processing
+     * anymore. Confirmed live: isProcessing stayed true and the progress percentage never moved
+     * across multiple app relaunches, with no worker activity in logcat at all.
+     */
+    suspend fun isContinuousWorkActuallyRunning(): Boolean {
+        return try {
+            val workInfos = workManager.getWorkInfosForUniqueWork("${WORK_NAME_BATCH_OCR}_continuous").get()
+            workInfos.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check live WorkManager state for continuous Devanagari OCR work", e)
+            false
+        }
+    }
+
+    /**
      * Check if monitoring should be active and start if needed
      */
     suspend fun ensureProgressMonitoring() {

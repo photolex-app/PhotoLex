@@ -24,6 +24,7 @@ class OcrTextExtractor(private val context: Context) {
         private const val TAG = "OcrTextExtractor"
         private const val MAX_IMAGE_SIZE = 1024 // Max dimension for OCR processing
         private const val OCR_TIMEOUT_MS = 3000L // 3 seconds timeout for OCR processing
+        private const val BITMAP_LOAD_TIMEOUT_MS = 5000L // 5 seconds timeout for loading/decoding the bitmap
     }
     
     /**
@@ -35,9 +36,15 @@ class OcrTextExtractor(private val context: Context) {
 
             Log.d(TAG, "Starting OCR processing for image: $imageUri")
 
-            // Load and optimize bitmap for OCR with fallback mechanisms
-            val bitmap = loadOptimizedBitmap(imageUri)
-                ?: return OcrResult.Error("Failed to load image from URI")
+            // Load and optimize bitmap for OCR with fallback mechanisms. loadOptimizedBitmap()
+            // does synchronous, non-cancellable I/O -- a plain coroutine withTimeoutOrNull only
+            // makes this *caller* stop waiting, it can't kill that thread, so a genuinely hung
+            // decode orphans a thread forever. See BlockingCallHardTimeout for the live-confirmed
+            // symptom this caused (enough orphaned hangs over a session fully exhausted the
+            // shared Dispatchers.IO pool, silently blocking all future OCR work).
+            val bitmap = BlockingCallHardTimeout.runWithHardTimeout(BITMAP_LOAD_TIMEOUT_MS) {
+                loadOptimizedBitmap(imageUri)
+            } ?: return OcrResult.Error("Failed to load image from URI (or timed out loading it)")
 
             Log.d(TAG, "Bitmap loaded successfully: ${bitmap.width}x${bitmap.height}, config: ${bitmap.config}")
 

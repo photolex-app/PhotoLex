@@ -270,7 +270,11 @@ fun SingleAlbumViewBottomBar(
                         trashed = true
                     )
 
-                    selectedItemsList.clear()
+                    // Clearing the selection is a Compose state mutation -- do it back on the
+                    // main thread once the file I/O above is done, not from IO.
+                    withContext(Dispatchers.Main) {
+                        selectedItemsList.clear()
+                    }
                 }
             }
         )
@@ -483,7 +487,11 @@ fun TrashedPhotoGridViewBottomBar(
                         trashed = false
                     )
 
-                    selectedItemsList.clear()
+                    // Clearing the selection is a Compose state mutation -- do it back on the
+                    // main thread once the file I/O above is done, not from IO.
+                    withContext(Dispatchers.Main) {
+                        selectedItemsList.clear()
+                    }
                 }
             }
         )
@@ -970,7 +978,11 @@ fun FavouritesViewBottomAppBar(
                         trashed = true
                     )
 
-                    selectedItemsList.clear()
+                    // Clearing the selection is a Compose state mutation -- do it back on the
+                    // main thread once the file I/O above is done, not from IO.
+                    withContext(Dispatchers.Main) {
+                        selectedItemsList.clear()
+                    }
                 }
             }
         )

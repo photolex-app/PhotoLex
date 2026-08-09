@@ -72,6 +72,15 @@ data class MediaStoreData(
         return calendar.timeInMillis / 1000
     }
 
+    // section is deliberately excluded here -- it's a `var` that groupGalleryBy() reassigns to a
+    // brand-new SectionItem every time the gallery list is regrouped (which can happen reactively
+    // in the background, e.g. from a MediaStore ContentObserver firing after an unrelated change).
+    // Including it in equals()/hashCode() made selectedItemsList.contains(item) silently start
+    // returning false for an already-selected photo the moment such a regroup happened between
+    // selecting it and the next tap -- observed live: selecting a 2nd/3rd photo left their
+    // checkboxes visually unchecked even though the top bar's count was correct, because the
+    // selection *list* still held the old-generation object these newly-regrouped ones no longer
+    // equaled.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
@@ -86,7 +95,6 @@ data class MediaStoreData(
         if (dateTaken != other.dateTaken) return false
         if (displayName != other.displayName) return false
         if (absolutePath != other.absolutePath) return false
-        if (section != other.section) return false
 
         return true
     }
@@ -100,7 +108,6 @@ data class MediaStoreData(
         result = 31 * result + dateTaken.hashCode()
         result = 31 * result + (displayName.hashCode())
         result = 31 * result + absolutePath.hashCode()
-        result = 31 * result + section.hashCode()
         return result
     }
 }

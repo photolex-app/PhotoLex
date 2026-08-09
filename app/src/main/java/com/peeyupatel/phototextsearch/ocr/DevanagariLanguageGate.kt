@@ -31,6 +31,7 @@ class DevanagariLanguageGate(private val context: Context) {
         private const val TAG = "DevanagariLanguageGate"
         private const val PRESCAN_MAX_DIMENSION = 400
         private const val PRESCAN_TIMEOUT_MS = 1500L
+        private const val BITMAP_LOAD_TIMEOUT_MS = 3000L
     }
 
     private val recognizer: TextRecognizer =
@@ -59,7 +60,14 @@ class DevanagariLanguageGate(private val context: Context) {
     }
 
     private suspend fun quickRecognizedText(uri: Uri): String? {
-        val bitmap = loadSmallBitmap(uri) ?: return null
+        // BitmapDownsampler.loadSmallBitmap() is synchronous, non-cancellable I/O -- run it on
+        // the dedicated hard-timeout pool, not inline, so a hung decode here can't orphan a
+        // thread on the shared Dispatchers.IO pool. See BlockingCallHardTimeout for the
+        // live-confirmed symptom (enough such hangs over a session exhausted that shared pool
+        // entirely, silently blocking all future OCR work).
+        val bitmap = BlockingCallHardTimeout.runWithHardTimeout(BITMAP_LOAD_TIMEOUT_MS) {
+            loadSmallBitmap(uri)
+        } ?: return null
         return try {
             if (bitmap.width <= 0 || bitmap.height <= 0) return null
             val inputImage = InputImage.fromBitmap(bitmap, 0)
