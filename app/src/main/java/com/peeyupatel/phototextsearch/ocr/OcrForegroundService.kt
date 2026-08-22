@@ -145,19 +145,27 @@ class OcrForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "📨 Service command received: ${intent?.action}")
-        
+
+        // Must happen synchronously, before any suspending work, for every command -- Android
+        // kills the app with ForegroundServiceDidNotStartInTimeException if startForeground()
+        // isn't called within a short, strict window after startForegroundService(). The start*
+        // OcrProcessing() functions below used to only call startForeground() from inside a
+        // coroutine after an async DataStore settings read, which is normally fast enough but
+        // missed the deadline (and crashed) when that read got queued behind heavy I/O -- e.g.
+        // right after a large index restore. Calling it here first, with a generic notification
+        // that the coroutines below promptly replace with the real title, is safe and idempotent
+        // even for stop commands.
+        startForeground(NOTIFICATION_ID, createServiceNotification())
+
         when (intent?.action) {
             ACTION_START_LATIN_OCR -> startLatinOcrProcessing()
             ACTION_START_DEVANAGARI_OCR -> startDevanagariOcrProcessing()
             ACTION_STOP_LATIN_OCR -> stopLatinOcrProcessing()
             ACTION_STOP_DEVANAGARI_OCR -> stopDevanagariOcrProcessing()
             ACTION_STOP_SERVICE -> stopSelf()
-            else -> {
-                // Default: start with a basic notification
-                startForeground(NOTIFICATION_ID, createServiceNotification())
-            }
+            else -> {}
         }
-        
+
         // Return START_STICKY to ensure service restarts if killed by system
         return START_STICKY
     }

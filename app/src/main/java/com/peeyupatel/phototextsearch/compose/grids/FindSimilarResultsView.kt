@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -94,14 +95,24 @@ fun FindSimilarResultsView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                // Same fix as CuratedAlbumDetailView.kt: without this, the header sits under
+                // the system status bar under edge-to-edge.
+                .statusBarsPadding()
                 .padding(8.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(id = R.drawable.back_arrow), contentDescription = "Back")
+                Icon(
+                    painterResource(id = R.drawable.back_arrow),
+                    contentDescription = "Back",
+                    // Explicit theme color -- see CuratedAlbumDetailView.kt for why this can't
+                    // rely on Icon's default tint here (no Surface/Scaffold ancestor).
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
             }
             Text(
                 text = if (selectedWithoutSection.isEmpty()) "Similar Documents" else "${selectedWithoutSection.size} selected",
                 style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.align(Alignment.Center)
             )
             if (groupedMedia.value.isNotEmpty()) {
@@ -114,7 +125,11 @@ fun FindSimilarResultsView(
                     },
                     modifier = Modifier.align(Alignment.CenterEnd)
                 ) {
-                    Icon(painterResource(id = R.drawable.add), contentDescription = "Add to Album")
+                    Icon(
+                        painterResource(id = R.drawable.add),
+                        contentDescription = "Add to Album",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
                 }
             }
         }
@@ -164,8 +179,16 @@ fun FindSimilarResultsView(
                         }
                         .padding(horizontal = 24.dp, vertical = 4.dp)
                 ) {
-                    Icon(painterResource(id = R.drawable.add), contentDescription = "Add to Album")
-                    Text("Add to Album", style = MaterialTheme.typography.labelSmall)
+                    Icon(
+                        painterResource(id = R.drawable.add),
+                        contentDescription = "Add to Album",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Add to Album",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,

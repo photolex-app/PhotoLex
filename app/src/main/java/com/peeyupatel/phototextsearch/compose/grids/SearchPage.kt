@@ -255,8 +255,9 @@ fun SearchPage(
             }
         }
 
-        // Search type state: "metadata", "ocr", "combined" - Default to OCR for text search
-        var searchType by rememberSaveable { mutableStateOf("ocr") }
+        // Search type state: "metadata", "ocr", "combined" - defaults to "combined" ("Both") so
+        // a fresh search checks metadata and OCR text together, rather than only OCR text.
+        var searchType by rememberSaveable { mutableStateOf("combined") }
 
         // OCR progress tracking
         val context = LocalContext.current

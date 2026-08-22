@@ -142,6 +142,11 @@ fun SingleAlbumDialog(
                     Icon(
                         painter = painterResource(id = R.drawable.close),
                         contentDescription = "Close dialog button",
+                        // Explicit theme color -- LavenderDialogBase is a plain Dialog/Column,
+                        // not a Surface, so it never fixes up LocalContentColor itself; it only
+                        // renders correctly today by luck of every current caller being inside a
+                        // Scaffold higher up. See CuratedAlbumDetailView.kt for the full story.
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .size(24.dp)
                     )
@@ -362,6 +367,11 @@ fun SinglePhotoInfoDialog(
                     Icon(
                         painter = painterResource(id = R.drawable.close),
                         contentDescription = "Close dialog button",
+                        // Explicit theme color -- LavenderDialogBase is a plain Dialog/Column,
+                        // not a Surface, so it never fixes up LocalContentColor itself; it only
+                        // renders correctly today by luck of every current caller being inside a
+                        // Scaffold higher up. See CuratedAlbumDetailView.kt for the full story.
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .size(24.dp)
                     )
@@ -653,6 +663,11 @@ fun MainAppDialog(
                     Icon(
                         painter = painterResource(id = R.drawable.close),
                         contentDescription = "Close dialog button",
+                        // Explicit theme color -- LavenderDialogBase is a plain Dialog/Column,
+                        // not a Surface, so it never fixes up LocalContentColor itself; it only
+                        // renders correctly today by luck of every current caller being inside a
+                        // Scaffold higher up. See CuratedAlbumDetailView.kt for the full story.
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .size(24.dp)
                     )
@@ -663,6 +678,7 @@ fun MainAppDialog(
                     text = currentView.value.name, // .split(splitBy)[1],
                     fontWeight = FontWeight.Bold,
                     fontSize = TextUnit(18f, TextUnitType.Sp),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .align(Alignment.Center)
                 )
@@ -934,6 +950,8 @@ fun SelectingMoreOptionsDialog(
                 Icon(
                     painter = painterResource(id = R.drawable.close),
                     contentDescription = "Close dialog button",
+                    // Explicit theme color -- see the identical comment earlier in this file.
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .size(24.dp)
                 )
@@ -941,6 +959,7 @@ fun SelectingMoreOptionsDialog(
 
             Text(
                 text = "More Options",
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .align(Alignment.Center)
             )

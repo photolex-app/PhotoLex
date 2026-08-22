@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -98,14 +99,27 @@ fun CuratedAlbumDetailView(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                // Without this, the header sits flush against the true top of the screen under
+                // edge-to-edge and gets drawn partly behind the system status bar -- the back
+                // arrow and delete icon were both clipped by it, and the title shared the status
+                // bar's own row.
+                .statusBarsPadding()
                 .padding(8.dp),
         ) {
             IconButton(onClick = onBack) {
-                Icon(painterResource(id = R.drawable.back_arrow), contentDescription = "Back")
+                Icon(
+                    painterResource(id = R.drawable.back_arrow),
+                    contentDescription = "Back",
+                    // Explicit theme color -- Icon's default tint falls back to a hardcoded
+                    // black (Compose's LocalContentColor default) outside a Surface/Scaffold,
+                    // not the theme, which made this invisible in dark mode.
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
             }
             Text(
                 text = albumName,
                 style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.align(Alignment.Center)
             )
             IconButton(
@@ -160,8 +174,16 @@ fun CuratedAlbumDetailView(
                         }
                         .padding(horizontal = 24.dp, vertical = 4.dp)
                 ) {
-                    Icon(painterResource(id = R.drawable.close), contentDescription = "Remove from Album")
-                    Text("Remove from Album", style = MaterialTheme.typography.labelSmall)
+                    Icon(
+                        painterResource(id = R.drawable.close),
+                        contentDescription = "Remove from Album",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        "Remove from Album",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }
@@ -318,7 +340,11 @@ private fun CuratedAlbumsRowContent(
                     .clickable { onCreateClick() }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Icon(painterResource(id = R.drawable.add), contentDescription = "New Album")
+                Icon(
+                    painterResource(id = R.drawable.add),
+                    contentDescription = "New Album",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
                 Text(
                     text = "New Album",
                     style = MaterialTheme.typography.labelLarge,

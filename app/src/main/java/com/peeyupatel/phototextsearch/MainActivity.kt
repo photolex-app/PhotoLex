@@ -1429,8 +1429,11 @@ class MainActivity : ComponentActivity() {
         }
 
         // The animation draws its own full scene; the system's static icon would otherwise
-        // sit underneath/behind it doing nothing useful.
-        provider.iconView.alpha = 0f
+        // sit underneath/behind it doing nothing useful. iconView is nullable -- the platform
+        // can return null here (e.g. no icon was drawable, or a timing edge case), and skipping
+        // it without a null check crashed intermittently on cold launch (confirmed via dropbox
+        // crash log: NullPointerException in onSplashScreenExit).
+        provider.iconView?.alpha = 0f
 
         val composeView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(this@MainActivity)

@@ -773,7 +773,7 @@ class SettingsOcrImpl(
     }
 
     val devanagariOcrEnabled: Flow<Boolean> = context.datastore.data.map { preferences ->
-        preferences[devanagariOcrEnabledKey] ?: false // Default to disabled for Devanagari OCR
+        preferences[devanagariOcrEnabledKey] ?: true // Default to enabled, same as Latin OCR
     }
 
     /** Whether background OCR indexing is allowed to run while the device reports low battery.
