@@ -43,7 +43,11 @@ import com.peeyupatel.phototextsearch.database.migrations.Migration9to10
         DevanagariOcrTextFtsEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 10, // Updated to version 10 to add FTS4 full-text search for Devanagari OCR text
+    // Updated to version 10 to add FTS4 full-text search for Devanagari OCR text.
+    // NOTE: IndexBackupHelper.MEDIA_DB_SCHEMA_VERSION must be bumped to match whenever this
+    // changes, or every backup made by this app version gets wrongly rejected as "incompatible"
+    // when restored, even on the exact same app build.
+    version = 10,
     autoMigrations = [
         AutoMigration(from = 2, to = 3),
         // AutoMigration(from = 4, to = 5) - Manual migration needed

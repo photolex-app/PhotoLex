@@ -664,7 +664,11 @@ fun TabCustomizationDialog(
                 if (tab !in DefaultTabs.defaultList) {
                     InfoRow(
                         text = tab.name,
-                        iconResId = R.drawable.delete
+                        iconResId = R.drawable.delete,
+                        // One-way removal of a user-created tab, unlike the default-tabs list
+                        // above (a reversible on/off toggle sharing this same delete/add icon
+                        // pair) -- gets the semantic error color. See SinglePhotoView.kt.
+                        iconTint = MaterialTheme.colorScheme.error
                     ) {
                         if (tabList.size > 1) {
                             mainViewModel.settings.DefaultTabs.setTabList(

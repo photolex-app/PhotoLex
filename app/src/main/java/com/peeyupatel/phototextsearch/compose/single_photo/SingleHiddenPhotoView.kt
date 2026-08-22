@@ -585,7 +585,8 @@ private fun BottomBar(
                             Icon(
                                 painter = painterResource(id = R.drawable.trash),
                                 contentDescription = "Permanently Delete Image Button",
-                                tint = MaterialTheme.colorScheme.primary,
+                                // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier
                                     .size(22.dp)
                             )
@@ -599,7 +600,7 @@ private fun BottomBar(
                                 text = "Delete",
                                 fontSize = TextUnit(16f, TextUnitType.Sp),
                                 textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier
                                     .fillMaxWidth(1f)
                             )

@@ -771,6 +771,7 @@ fun MainAppSelectingBottomBar(
                     text = "Delete",
                     iconResId = R.drawable.delete,
                     cornerRadius = 16.dp,
+                    contentColor = MaterialTheme.colorScheme.error,
                     action = {
                         if (confirmToDelete) showDeleteDialog.value = true
                         else runDeleteAction.value = true

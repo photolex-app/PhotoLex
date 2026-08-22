@@ -63,11 +63,12 @@ fun SearchBar(
         TextField(
             value = query.value,
             onValueChange = onQueryChange,
-            placeholder = { 
+            placeholder = {
                 Text(
                     text = placeholder,
-                    fontSize = TextUnit(16f, TextUnitType.Sp)
-                ) 
+                    fontSize = TextUnit(16f, TextUnitType.Sp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             },
             leadingIcon = {
                 // Tapping the search glyph itself submits the search -- a visible, always-

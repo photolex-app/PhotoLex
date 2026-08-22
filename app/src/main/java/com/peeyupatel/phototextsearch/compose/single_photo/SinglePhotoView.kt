@@ -715,6 +715,11 @@ private fun BottomBar(
                         text = "Share",
                         iconResId = R.drawable.share,
                         cornerRadius = 32.dp,
+                        // This bar can carry up to 6 items (Share/Copy/Similar/Select/Edit/Delete) --
+                        // the default 64.dp/14sp sizing was overflowing on portrait phone widths,
+                        // truncating "Delete" down to "D...". Sized to comfortably fit 6 across.
+                        buttonWidth = 56.dp,
+                        textSize = 12f,
                         action = {
                             shareImage(currentItem.uri, context)
                         }
@@ -725,6 +730,8 @@ private fun BottomBar(
                             text = "Copy",
                             iconResId = R.drawable.copy,
                             cornerRadius = 32.dp,
+                            buttonWidth = 56.dp,
+                            textSize = 12f,
                             action = {
                                 copyTextCoroutineScope.launch {
                                     val ocrResult = try {
@@ -773,6 +780,8 @@ private fun BottomBar(
                             text = "Similar",
                             iconResId = R.drawable.search,
                             cornerRadius = 32.dp,
+                            buttonWidth = 56.dp,
+                            textSize = 12f,
                             action = {
                                 navController.navigate(
                                     com.peeyupatel.phototextsearch.helpers.Screens.FindSimilarView(
@@ -788,6 +797,8 @@ private fun BottomBar(
                             text = "Select",
                             iconResId = R.drawable.highlighter,
                             cornerRadius = 32.dp,
+                            buttonWidth = 56.dp,
+                            textSize = 12f,
                             action = onSearchRegion
                         )
                     }
@@ -806,6 +817,8 @@ private fun BottomBar(
                         text = "Edit",
                         iconResId = R.drawable.paintbrush,
                         cornerRadius = 32.dp,
+                        buttonWidth = 56.dp,
+                        textSize = 12f,
                         action = if (currentItem.type == MediaType.Image) {
                             showEditingView
                         } else {
@@ -851,6 +864,11 @@ private fun BottomBar(
                         text = "Delete",
                         iconResId = R.drawable.trash,
                         cornerRadius = 32.dp,
+                        buttonWidth = 56.dp,
+                        textSize = 12f,
+                        // Destructive actions get the semantic error color, matching how every
+                        // other platform (incl. Apple's HIG) visually flags delete/remove.
+                        contentColor = MaterialTheme.colorScheme.error,
                         action = {
                             if (confirmToDelete) showDeleteDialog.value = true
                             else runTrashAction.value = true

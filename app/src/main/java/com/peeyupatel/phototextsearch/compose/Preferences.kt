@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.peeyupatel.phototextsearch.R
 import com.peeyupatel.phototextsearch.compose.dialogs.getDefaultShapeSpacerForPosition
 import com.peeyupatel.phototextsearch.helpers.RowPosition
-import com.peeyupatel.phototextsearch.helpers.darkenColor
 
 @Composable
 fun PreferencesRow(
@@ -104,7 +103,7 @@ fun PreferencesRow(
         ) {
             Text(
                 text = title,
-                fontSize = TextUnit(titleTextSize, TextUnitType.Sp),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = TextUnit(titleTextSize, TextUnitType.Sp)),
                 textAlign = TextAlign.Start,
                 color = contentColor
             )
@@ -112,9 +111,9 @@ fun PreferencesRow(
             if (summary != null) {
                 Text(
                     text = summary,
-                    fontSize = TextUnit(14f, TextUnitType.Sp),
+                    style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start,
-                    color = contentColor.copy(alpha = 0.75f),
+                    color = contentColor.copy(alpha = 0.7f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -196,7 +195,7 @@ fun PreferencesSwitchRow(
         ) {
             Text(
                 text = title,
-                fontSize = TextUnit(18f, TextUnitType.Sp),
+                style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Start,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -204,9 +203,9 @@ fun PreferencesSwitchRow(
             if (summary != null) {
                 Text(
                     text = summary,
-                    fontSize = TextUnit(14f, TextUnitType.Sp),
+                    style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start,
-                    color = darkenColor(MaterialTheme.colorScheme.onSurface, 0.15f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -246,7 +245,7 @@ fun PreferencesSwitchRow(
 fun PreferencesSeparatorText(text: String) {
     Text(
         text = text,
-        fontSize = TextUnit(16f, TextUnitType.Sp),
+        style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
             .padding(12.dp)
@@ -283,7 +282,7 @@ fun RadioButtonRow(
 
         Text(
             text = text,
-            fontSize = TextUnit(14f, TextUnitType.Sp),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .wrapContentSize()
@@ -322,7 +321,7 @@ fun CheckBoxButtonRow(
         val state = rememberScrollState()
         Text(
             text = text,
-            fontSize = TextUnit(14f, TextUnitType.Sp),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             modifier = Modifier
@@ -409,7 +408,7 @@ fun PreferencesThreeStateSwitchRow(
         ) {
             Text(
                 text = title,
-                fontSize = TextUnit(18f, TextUnitType.Sp),
+                style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Start,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -417,9 +416,9 @@ fun PreferencesThreeStateSwitchRow(
             if (summary != null) {
                 Text(
                     text = summary,
-                    fontSize = TextUnit(14f, TextUnitType.Sp),
+                    style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Start,
-                    color = darkenColor(MaterialTheme.colorScheme.onSurface, 0.15f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )

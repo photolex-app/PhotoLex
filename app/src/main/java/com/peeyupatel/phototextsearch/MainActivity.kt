@@ -26,6 +26,7 @@ import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -82,11 +83,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.splashscreen.SplashScreenViewProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -106,6 +112,7 @@ import com.peeyupatel.phototextsearch.compose.LockedFolderEntryView
 import com.peeyupatel.phototextsearch.compose.PermissionHandler
 import com.peeyupatel.phototextsearch.compose.ViewProperties
 import com.peeyupatel.phototextsearch.compose.app_bars.AnimatedBottomNavigationBar
+import com.peeyupatel.phototextsearch.compose.splash.SplashIntroSequence
 import com.peeyupatel.phototextsearch.compose.app_bars.MainAppBottomBar
 import com.peeyupatel.phototextsearch.compose.app_bars.MainAppSelectingBottomBar
 import com.peeyupatel.phototextsearch.compose.app_bars.MainAppTopBar
@@ -237,7 +244,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setOnExitAnimationListener(::animateSplashExit)
 
         // Configure window for better navigation bar handling
         configureSystemUI()
@@ -1400,6 +1408,43 @@ class MainActivity : ComponentActivity() {
                 MainAppSelectingBottomBar(selectedItemsList)
             }
         }
+    }
+
+    /**
+     * Custom splash screen exit: hosts the Compose-driven [SplashIntroSequence] (five graphic
+     * photo cards -- receipt, sticky note, sign, ID card, bilingual English/Hindi note -- that
+     * pop in, flip to reveal the real word "extracted" from each, and fly that word toward the
+     * search bar) inside a [ComposeView] added to the system-provided SplashScreenView. Compose
+     * is used here instead of hand-rolled View/ObjectAnimator code because the sequence has
+     * enough moving parts (5 cards x pop-in + 3D flip + word flight, each independently timed)
+     * that the declarative, state-driven approach is far more tractable than imperative
+     * AnimatorSets -- see git history for the earlier View-based attempt this replaced.
+     */
+    private fun animateSplashExit(provider: SplashScreenViewProvider) {
+        val rootView = provider.view as? ViewGroup
+
+        if (rootView == null) {
+            provider.remove()
+            return
+        }
+
+        // The animation draws its own full scene; the system's static icon would otherwise
+        // sit underneath/behind it doing nothing useful.
+        provider.iconView.alpha = 0f
+
+        val composeView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(this@MainActivity)
+            setViewTreeViewModelStoreOwner(this@MainActivity)
+            setViewTreeSavedStateRegistryOwner(this@MainActivity)
+            setContent {
+                SplashIntroSequence(onFinished = { provider.remove() })
+            }
+        }
+
+        rootView.addView(
+            composeView,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
     }
 
     /**

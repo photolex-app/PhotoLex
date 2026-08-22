@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-mode counterpart to values/colors.xml's splash_post_background;
+         must match GalleryTheme's CharcoalBackgroundDark. -->
+    <color name="splash_post_background">#14161C</color>
+</resources>

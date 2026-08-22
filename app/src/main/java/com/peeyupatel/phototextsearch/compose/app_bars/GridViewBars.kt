@@ -286,6 +286,8 @@ fun SingleAlbumViewBottomBar(
                 text = "Delete",
                 iconResId = R.drawable.delete,
                 cornerRadius = 16.dp,
+                // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                contentColor = MaterialTheme.colorScheme.error,
                 action = {
                     if (confirmToDelete) showDeleteDialog.value = true
                     else runTrashAction.value = true
@@ -305,6 +307,7 @@ fun SingleAlbumViewBottomBar(
                 text = "Remove",
                 iconResId = R.drawable.delete,
                 cornerRadius = 16.dp,
+                contentColor = MaterialTheme.colorScheme.error,
                 action = {
                     if (confirmToDelete) showDeleteDialog.value = true
                     else runTrashAction.value = true
@@ -417,7 +420,8 @@ fun TrashedPhotoGridViewTopBar(
                         Icon(
                             painter = painterResource(id = R.drawable.trash),
                             contentDescription = "empty out the trash bin",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                            tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier
                                 .size(24.dp)
                         )
@@ -534,6 +538,7 @@ fun TrashedPhotoGridViewBottomBar(
             text = "Delete",
             iconResId = R.drawable.delete,
             cornerRadius = 16.dp,
+            contentColor = MaterialTheme.colorScheme.error,
             action = {
                 if (selectedItemsWithoutSection.isNotEmpty()) {
                     showPermaDeleteDialog.value = true
@@ -787,6 +792,7 @@ fun SecureFolderViewBottomAppBar(
             text = "Delete",
             iconResId = R.drawable.delete,
             cornerRadius = 16.dp,
+            contentColor = MaterialTheme.colorScheme.error,
             action = {
                 showPermaDeleteDialog.value = true
             },
@@ -991,6 +997,7 @@ fun FavouritesViewBottomAppBar(
             text = "Delete",
             iconResId = R.drawable.delete,
             cornerRadius = 16.dp,
+            contentColor = MaterialTheme.colorScheme.error,
             action = {
                 if (confirmToDelete) {
                     showDeleteDialog.value = true

@@ -199,7 +199,7 @@ fun BottomAppBarItem(
         Text(
             text = text,
             fontSize = TextUnit(textSize, TextUnitType.Sp),
-            color = MaterialTheme.colorScheme.onSurface,
+            color = contentColor,
             // Constrained to the button's own width (was wrapContentSize(), letting long labels
             // like "Secure"/"Copy Text" overflow past their slot and visually overlap the
             // neighboring button) -- now centered and truncated with an ellipsis instead.

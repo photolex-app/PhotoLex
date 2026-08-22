@@ -2,19 +2,22 @@
 <!--
   PhotoLex app icon (photolex_icon_v5.png), used only as the adaptive-icon foreground layer
   (in-app UI uses drawable/ic_launcher_photolex directly instead, see MainBars.kt comment).
-  Adaptive icons mask this 108dp x 108dp layer down to a smaller "safe zone" that varies by
-  launcher/OEM shape, and corners get clipped harder than the flat edges. A uniform 10% inset,
-  an earlier attempt at making the artwork bigger per user feedback, pushed the magnifying
-  glass handle (which extends toward the bottom-right corner of the source image) past where
-  the launcher's mask crops, cutting the handle off entirely on the home-screen icon (confirmed:
-  it still rendered fine in-app, where this image is shown flat with no masking). Asymmetric
-  insets fix this without giving back all the size gained: less padding on the top and left
-  (8%, where content doesn't reach the edge anyway) and more on the bottom and right (15%,
-  protecting the handle specifically).
+
+  Android's adaptive-icon spec masks this 108dp x 108dp layer down to whatever shape the
+  launcher/OEM uses (circle, squircle, rounded square, teardrop...), but only guarantees that
+  the inner 66dp safe zone survives every shape;that's an 18dp margin on all four sides,
+  i.e. ~16.7% inset minimum. A previous asymmetric-inset attempt (8% top/left, 15% bottom/right)
+  undershot that on every side;it was tuned only against the bottom-right magnifying-glass
+  handle getting clipped, not against the actual safe-zone requirement, so the top-left "photo
+  card" corner and header bar were still landing outside the guaranteed-safe area and got cut
+  by the circular mask on this Pixel 8 profile. Bumped to clear the safe zone on all sides, with
+  extra margin on the bottom/right to keep protecting the handle specifically (confirmed the
+  full, uncropped artwork still renders fine in-app, where this image is shown flat with no
+  masking;see MainBars.kt).
 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_launcher_photolex"
-    android:insetLeft="8%"
-    android:insetTop="8%"
-    android:insetRight="15%"
-    android:insetBottom="15%" />
+    android:insetLeft="18%"
+    android:insetTop="18%"
+    android:insetRight="22%"
+    android:insetBottom="22%" />

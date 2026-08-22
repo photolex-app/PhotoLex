@@ -112,7 +112,12 @@ fun CuratedAlbumDetailView(
                 onClick = { showDeleteDialog = true },
                 modifier = Modifier.align(Alignment.CenterEnd)
             ) {
-                Icon(painterResource(id = R.drawable.delete), contentDescription = "Delete album")
+                Icon(
+                    painterResource(id = R.drawable.delete),
+                    contentDescription = "Delete album",
+                    // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
 

@@ -79,6 +79,7 @@ fun DialogClickableItem(
     position: RowPosition,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    iconTint: Color = MaterialTheme.colorScheme.onSurface,
     action: (() -> Unit)? = null
 ) {
     val (shape, spacerHeight) = getDefaultShapeSpacerForPosition(position)
@@ -103,7 +104,7 @@ fun DialogClickableItem(
         Icon(
             painter = painterResource(id = iconResId),
             contentDescription = "icon describing: $text",
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = iconTint,
             modifier = Modifier
                 .size(20.dp)
         )
@@ -112,7 +113,7 @@ fun DialogClickableItem(
 
         Text(
             text = text,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = iconTint,
             fontSize = TextUnit(16f, TextUnitType.Sp),
             textAlign = TextAlign.Start,
             modifier = Modifier
@@ -461,6 +462,7 @@ fun InfoRow(
     text: String,
     @DrawableRes iconResId: Int,
     opacity: Float = 1f,
+    iconTint: Color = MaterialTheme.colorScheme.onSurface,
     onRemove: () -> Unit
 ) {
     Row(
@@ -491,7 +493,7 @@ fun InfoRow(
             Icon(
                 painter = painterResource(id = iconResId),
                 contentDescription = "Remove this tab",
-                tint = MaterialTheme.colorScheme.onSurface,
+                tint = iconTint,
                 modifier = Modifier
                     .size(20.dp)
             )

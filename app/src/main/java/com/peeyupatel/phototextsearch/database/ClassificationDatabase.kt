@@ -27,6 +27,9 @@ import com.peeyupatel.phototextsearch.database.entities.PhotoClassificationEntit
         CuratedAlbumPhotoEntity::class,
         BarcodeEntity::class
     ],
+    // NOTE: IndexBackupHelper.CLASSIFICATION_DB_SCHEMA_VERSION must be bumped to match whenever
+    // this changes, or every backup made by this app version gets wrongly rejected as
+    // "incompatible" when restored, even on the exact same app build.
     version = 6
 )
 abstract class ClassificationDatabase : RoomDatabase() {

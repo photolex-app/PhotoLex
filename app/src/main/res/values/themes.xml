@@ -2,6 +2,10 @@
 <resources>
     <style name="Theme.Gallery" parent="Theme.Material3.DayNight">
 		<item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+		<!-- Without this, Theme.Material3.DayNight's own default (a pale lavender) shows for
+		     one frame during the native-splash-to-Compose handoff. -->
+		<item name="android:windowBackground">@color/splash_post_background</item>
+		<item name="android:colorBackground">@color/splash_post_background</item>
     </style>
 
     <style name="Theme.Gallery.Splashscreen" parent="Theme.SplashScreen">

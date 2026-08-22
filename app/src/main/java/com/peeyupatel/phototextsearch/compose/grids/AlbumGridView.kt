@@ -622,7 +622,8 @@ private fun CategoryList(
                 Icon(
                     painter = painterResource(id = R.drawable.trash),
                     contentDescription = "Trash Button",
-                    tint = MaterialTheme.colorScheme.primary,
+                    // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier
                         .size(20.dp)
                 )
@@ -631,7 +632,7 @@ private fun CategoryList(
                     text = "Trash ",
                     fontSize = TextUnit(16f, TextUnitType.Sp),
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier
                         .fillMaxWidth(1f)
                 )

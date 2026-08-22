@@ -244,6 +244,7 @@ fun SingleAlbumDialog(
                 iconResId = R.drawable.delete,
                 position = RowPosition.Middle,
                 enabled = !album.mainPath.checkPathIsDownloads(),
+                iconTint = MaterialTheme.colorScheme.error,
                 modifier = Modifier
                     .animateContentSize(
                         animationSpec = tween(

@@ -176,8 +176,17 @@ fun FindSimilarResultsView(
                         }
                         .padding(horizontal = 24.dp, vertical = 4.dp)
                 ) {
-                    Icon(painterResource(id = R.drawable.delete), contentDescription = "Delete")
-                    Text("Delete", style = MaterialTheme.typography.labelSmall)
+                    Icon(
+                        painterResource(id = R.drawable.delete),
+                        contentDescription = "Delete",
+                        // Destructive action gets the semantic error color -- see SinglePhotoView.kt.
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "Delete",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }

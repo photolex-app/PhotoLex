@@ -40,6 +40,7 @@ import com.peeyupatel.phototextsearch.compose.PreferencesSeparatorText
 import com.peeyupatel.phototextsearch.compose.dialogs.ConfirmationDialogWithBody
 import com.peeyupatel.phototextsearch.datastore.AlbumInfo
 import com.peeyupatel.phototextsearch.datastore.AlbumsList
+import com.peeyupatel.phototextsearch.helpers.BackupResult
 import com.peeyupatel.phototextsearch.helpers.DataAndBackupHelper
 import com.peeyupatel.phototextsearch.helpers.IndexBackupHelper
 import com.peeyupatel.phototextsearch.helpers.RowPosition
@@ -292,12 +293,16 @@ fun DataAndBackupPage() {
                             )
                         )
 
-                        val success = IndexBackupHelper.backupIndex(context, uri)
+                        val result = IndexBackupHelper.backupIndex(context, uri)
 
                         isLoading.value = false
+                        val success = result is BackupResult.Success
                         LavenderSnackbarController.pushEvent(
                             LavenderSnackbarEvents.MessageEvent(
-                                message = if (success) "Index backed up successfully" else "Index backup failed",
+                                message = when (result) {
+                                    is BackupResult.Success -> "Index backed up successfully"
+                                    is BackupResult.Failure -> "Index backup failed: ${result.reason}"
+                                },
                                 iconResId = if (success) R.drawable.check_item else R.drawable.error_2,
                                 duration = SnackbarDuration.Short
                             )
@@ -331,12 +336,16 @@ fun DataAndBackupPage() {
                                 )
                             )
 
-                            val success = IndexBackupHelper.restoreIndex(context, uri)
+                            val result = IndexBackupHelper.restoreIndex(context, uri)
 
                             isLoading.value = false
+                            val success = result is BackupResult.Success
                             LavenderSnackbarController.pushEvent(
                                 LavenderSnackbarEvents.MessageEvent(
-                                    message = if (success) "Index restored -- please restart the app" else "Index restore failed",
+                                    message = when (result) {
+                                        is BackupResult.Success -> "Index restored -- please restart the app"
+                                        is BackupResult.Failure -> "Index restore failed: ${result.reason}"
+                                    },
                                     iconResId = if (success) R.drawable.check_item else R.drawable.error_2,
                                     duration = SnackbarDuration.Long
                                 )
